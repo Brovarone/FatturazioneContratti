@@ -1,0 +1,21 @@
+Riepilogo di tutto il blocco migrato:
+
+    Dominio base: OrdiniEnums.cs, DomainConstants.cs, CurOrd.cs, CurOrdRow.cs, CurOrdRowCalculations.cs.
+
+    Motore Ordini e Canoni: FiltriOrdini.cs, OrderGenerationService.cs (GeneraRigheOrdine).
+
+    Motore ISTAT: OrderGenerationService.Istat.cs (AdeguaIstatOrdine).
+
+    Modelli Fatture: CurFatt.cs, CurFattRow.cs, FiltriOrdiniConsuntivo.cs.
+
+    Motore Consuntivi e Interventi: ConsuntivoService.cs (ControllaFlussoIntegra, GeneraFattureConsuntivo, Break, calcolo franchigie).
+
+    Aggiornamento SQL Diretto: FattureDaOrdiniService.cs (AdeguaFattureDaOrdini).
+
+    AppConfig gestisce i parametri;
+
+    SqlTools gestisce la creazione dei contesti e delle connessioni SQL;
+
+    FLogin fa solo da orchestratore UI leggero;
+
+    OrderGenerationService, ConsuntivoService e FattureDaOrdiniService svolgono tutto il lavoro pesante di business logic.
