@@ -46,8 +46,8 @@ namespace FatturazioneContratti.Orders
 
                 if (filtri.FiltroDateOrdini)
                 {
-                    query = query.Where(o => o.OrderDate.HasValue 
-                        && o.OrderDate.Value.Date >= filtri.FromOrdDate 
+                    query = query.Where(o => o.OrderDate.HasValue
+                        && o.OrderDate.Value.Date >= filtri.FromOrdDate
                         && o.OrderDate.Value.Date <= filtri.ToOrdDate);
                 }
                 else
@@ -135,8 +135,8 @@ namespace FatturazioneContratti.Orders
                             ElaboraScadenzeECessazioni(o, cOrd, cOrdRow, efAllordCliAcc, debugging);
 
                             // Generazione Righe se idoneo
-                            if (!cOrdRow.PrecendementeCessato 
-                                && ((cOrdRow.IsOk && !cOrdRow.CanoneFuoriRangeDate) || cOrdRow.DaRifatturare) 
+                            if (!cOrdRow.PrecendementeCessato
+                                && ((cOrdRow.IsOk && !cOrdRow.CanoneFuoriRangeDate) || cOrdRow.DaRifatturare)
                                 && (cOrdRow.QtaCorrente > 0 || cOrdRow.QtaDaRifatturare > 0))
                             {
                                 if (o.MaSaleOrdDetails.Count == 1 && CheckRigaBianca(o.MaSaleOrdDetails.First()))
@@ -218,8 +218,8 @@ namespace FatturazioneContratti.Orders
                             }
 
                             // Aggiornamento date prossima fatturazione
-                            if (!cOrdRow.CanoneFuoriRangeDate 
-                                && (cOrdRow.IsOk || cOrdRow.DaRifatturare || cOrdRow.SospesoDaAttivita) 
+                            if (!cOrdRow.CanoneFuoriRangeDate
+                                && (cOrdRow.IsOk || cOrdRow.DaRifatturare || cOrdRow.SospesoDaAttivita)
                                 && !cOrdRow.PrecendementeCessato)
                             {
                                 if (cOrdRow.DataProssimaFattura < filtri.DataFattA)
@@ -767,70 +767,22 @@ namespace FatturazioneContratti.Orders
         {
             if (totNuove == 0 && totAggiornate == 0) return;
 
-            using var bulkTrans = _context.Database.BeginTransaction();
-            try
+            bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_context, () =>
             {
-                _context.Database.ExecuteSqlRaw("DBCC TRACEON(610)");
+                BulkPersistenceHelper.BulkExecuteList(_context, ordini, "MaSaleOrd", BulkOperation.Update, "teste ordini", bulkMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, details, "MaSaleOrdDetails", BulkOperation.InsertOrUpdate, "righe ordini", bulkMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, summaries, "MaSaleOrdSummary", BulkOperation.InsertOrUpdate, "totali ordini", bulkMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, accessorie, "AllordCliAcc", BulkOperation.InsertOrUpdate, "dati accessori ordini", bulkMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, attivita, "AllordCliAttivita", BulkOperation.Update, "righe attività", bulkMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, contratti, "AllordCliContratto", BulkOperation.Update, "righe contratto", bulkMessage);
+            }, logMessage, errori);
 
-                EseguiBulkUpdateList(_context, ordini, "MaSaleOrd", "U", "teste ordini", bulkMessage);
-                EseguiBulkUpdateList(_context, details, "MaSaleOrdDetails", "IU", "righe ordini", bulkMessage);
-                EseguiBulkUpdateList(_context, summaries, "MaSaleOrdSummary", "IU", "totali ordini", bulkMessage);
-                EseguiBulkUpdateList(_context, accessorie, "AllordCliAcc", "IU", "dati accessori ordini", bulkMessage);
-                EseguiBulkUpdateList(_context, attivita, "AllordCliAttivita", "U", "righe attività", bulkMessage);
-                EseguiBulkUpdateList(_context, contratti, "AllordCliContratto", "U", "righe contratto", bulkMessage);
-
-                bulkTrans.Commit();
-                _context.Database.ExecuteSqlRaw("DBCC TRACEOFF(610)");
-
+            if (esito)
+            {
                 string riassunto = $"[RIASSUNTO] Ordini con Righe: {totNuove} | Ordini con Adeguamenti: {totAggiornate}";
                 bulkMessage.AppendLine(riassunto);
                 logMessage?.Invoke(riassunto);
             }
-            catch (Exception ex)
-            {
-                bulkTrans.Rollback();
-                errori.AppendLine($"[Salvataggio] Errore durante Bulk: {ex.Message}");
-                errori.AppendLine(ex.StackTrace);
-                logMessage?.Invoke($"[Salvataggio] Rollback eseguito a causa di errori: {ex.Message}");
-            }
-        }
-
-        private static void EseguiBulkUpdateList<T>(
-            DbContext context,
-            List<T> entityList,
-            string tableName,
-            string operation,
-            string stepDescription,
-            StringBuilder log) where T : class
-        {
-            if (!entityList.Any()) return;
-
-            int count = entityList.Count;
-            var bulkConfig = new BulkConfig
-            {
-                SqlBulkCopyOptions = SqlBulkCopyOptions.KeepNulls,
-                BulkCopyTimeout = 0,
-                CalculateStats = true,
-                BatchSize = count < 5000 ? 0 : count / 10,
-                NotifyAfter = count / 10
-            };
-
-            switch (operation)
-            {
-                case "I":
-                    context.BulkInsert(entityList, bulkConfig);
-                    break;
-                case "U":
-                    context.BulkUpdate(entityList, bulkConfig);
-                    break;
-                case "IU":
-                    context.BulkInsertOrUpdate(entityList, bulkConfig);
-                    break;
-            }
-
-            string msg = $"{tableName} ({stepDescription}) Ins:{bulkConfig.StatsInfo?.StatsNumberInserted} Agg:{bulkConfig.StatsInfo?.StatsNumberUpdated}";
-            log.AppendLine(msg);
-            Debug.WriteLine(msg);
         }
 
         #endregion

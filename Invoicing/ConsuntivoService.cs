@@ -551,34 +551,23 @@ namespace FatturazioneContratti.Invoicing
                 // Bulk Insert transazionale
                 if (efMaSaleDoc.Any())
                 {
-                    using var bulkTrans = _ordiniCntx.Database.BeginTransaction();
-                    try
+                    bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_ordiniCntx, () =>
                     {
-                        _ordiniCntx.Database.ExecuteSqlRaw("DBCC TRACEON(610)");
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDoc, "MaSaleDoc", BulkOperation.Insert, "fatture", bulkMessage);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDocDetails, "MaSaleDocDetails", BulkOperation.Insert, "dettagli fatture", bulkMessage);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDocSummary, "MaSaleDocSummary", BulkOperation.Insert, "summary fatture", bulkMessage);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaCrossReferences, "MaCrossReferences", BulkOperation.Insert, "cross ref", bulkMessage);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaCrossReferencesNotes, "MaCrossReferencesNotes", BulkOperation.Insert, "cross ref notes", bulkMessage);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaEiItdocAdditionalData, "MaEiItdocAdditionalData", BulkOperation.Insert, "dati aggiuntivi FE", bulkMessage);
 
-                        _ordiniCntx.BulkInsert(efMaSaleDoc);
-                        _ordiniCntx.BulkInsert(efMaSaleDocDetails);
-                        if (efMaSaleDocSummary.Any()) _ordiniCntx.BulkInsert(efMaSaleDocSummary);
-                        if (efMaCrossReferences.Any()) _ordiniCntx.BulkInsert(efMaCrossReferences);
-                        if (efMaCrossReferencesNotes.Any()) _ordiniCntx.BulkInsert(efMaCrossReferencesNotes);
-                        if (efMaEiItdocAdditionalData.Any()) _ordiniCntx.BulkInsert(efMaEiItdocAdditionalData);
-
-                        // Aggiornamento ultimo ID utilizzato
+                        // Aggiornamento contatore ID
                         idNumbers.LastId = saleDocId;
                         _ordiniCntx.SaveChanges();
+                    }, logMessage, errori);
 
-                        bulkTrans.Commit();
-                        _ordiniCntx.Database.ExecuteSqlRaw("DBCC TRACEOFF(610)");
+                    if (!esito) return false;
 
-                        logMessage?.Invoke($"Fatture generate con successo: {efMaSaleDoc.Count}");
-                    }
-                    catch (Exception ex)
-                    {
-                        bulkTrans.Rollback();
-                        errori.AppendLine($"Errore durante il salvataggio bulk delle fatture consuntivo: {ex.Message}");
-                        logMessage?.Invoke($"Rollback eseguito: {ex.Message}");
-                        return false;
-                    }
+                    logMessage?.Invoke($"Fatture generate con successo: {efMaSaleDoc.Count}");
                 }
 
                 return true;

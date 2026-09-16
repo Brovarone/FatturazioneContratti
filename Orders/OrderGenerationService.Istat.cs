@@ -306,34 +306,20 @@ namespace FatturazioneContratti.Orders
                 {
                     updateStatus?.Invoke("Salvataggio modifiche ISTAT in corso...");
 
-                    using var bulkTrans = _context.Database.BeginTransaction();
-                    try
+                    bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_context, () =>
                     {
-                        _context.Database.ExecuteSqlRaw("DBCC TRACEON(610)");
+                        BulkPersistenceHelper.BulkExecuteList(_context, efAllordCliAttivita, "ALLOrdCliAttivita", BulkOperation.InsertOrUpdate, "righe attività", bulkMessage);
+                        BulkPersistenceHelper.BulkExecuteList(_context, efAllordCliContratto, "ALLOrdCliContratto", BulkOperation.Update, "righe contratto", bulkMessage);
+                    }, logMessage, errori);
 
-                        if (efAllordCliAttivita.Any())
-                        {
-                            EseguiBulkUpdateList(_context, efAllordCliAttivita, "ALLOrdCliAttivita", "IU", "righe attività", bulkMessage);
-                        }
-
-                        if (efAllordCliContratto.Any())
-                        {
-                            EseguiBulkUpdateList(_context, efAllordCliContratto, "ALLOrdCliContratto", "U", "righe contratto", bulkMessage);
-                        }
-
-                        bulkTrans.Commit();
-                        _context.Database.ExecuteSqlRaw("DBCC TRACEOFF(610)");
-
+                    if (esito)
+                    {
                         string esitoMsg = $"Processati con successo: {totOrdiniOk} ordini per adeguamento ISTAT.";
                         bulkMessage.AppendLine(esitoMsg);
                         logMessage?.Invoke(esitoMsg);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        bulkTrans.Rollback();
-                        errori.AppendLine($"[Salvataggio ISTAT] Errore: {ex.Message}");
-                        errori.AppendLine(ex.StackTrace);
-                        logMessage?.Invoke($"[Salvataggio ISTAT] Rollback eseguito: {ex.Message}");
                         return false;
                     }
                 }
