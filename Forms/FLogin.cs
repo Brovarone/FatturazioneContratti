@@ -2,6 +2,7 @@
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using System.Text.Json;
 using FatturazioneContratti.Config;
 using FatturazioneContratti.Data;
 using FatturazioneContratti.Invoicing;
@@ -11,6 +12,49 @@ namespace FatturazioneContratti.Forms
 {
     public partial class FLogin : Form
     {
+        private const string AdminPassword = "123456";
+        private void esciToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Close();
+        }
+
+        private void configurazioneAvanzataToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            // Chiede la password con la maschera C# dedicata
+            if (!FPasswordPrompt.ChiediPassword(this, AdminPassword))
+            {
+                MessageBox.Show("Password non valida.", "Accesso Negato", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using var fSettings = new FSettings();
+            if (fSettings.ShowDialog(this) == DialogResult.OK)
+            {
+                UpdateAziendaStatus();
+                Log("Configurazione DB e percorsi salvata correttamente.");
+            }
+        }
+
+        private void apriJsonToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            AppConfig.ApriFileJson();
+        }
+
+        private void apriCartellaSettingsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            AppConfig.ApriCartellaImpostazioni();
+        }
+
+        private void apriCartellaLogToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            AppConfig.ApriCartellaLog();
+        }
+
+        private void pagheToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            MessageBox.Show("Modulo Paghe in fase di migrazione.", "Modulo Paghe", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         public FLogin()
         {
             InitializeComponent();
@@ -18,11 +62,17 @@ namespace FatturazioneContratti.Forms
 
         private void FLogin_Load(object sender, EventArgs e)
         {
+            // 1. Carica da JSON
+            AppConfig.Load();
+
+            // 2. Assegna ai controlli UI
             txtServer.Text = AppConfig.SqlServer;
             txtUser.Text = AppConfig.UserId;
             txtPassword.Text = AppConfig.Password;
             txtLoginId.Text = AppConfig.LoginId.ToString();
             chkTestDb.Checked = AppConfig.IsTestDb;
+            chkDebug.Checked = AppConfig.IsDebugging;
+            if (AppConfig.IsDbUno) rdoUno.Checked = true; else rdoSpa.Checked = true;
 
             UpdateAziendaStatus();
         }
@@ -70,6 +120,9 @@ namespace FatturazioneContratti.Forms
             AppConfig.IsTestDb = chkTestDb.Checked;
             AppConfig.IsDbUno = rdoUno.Checked;
             AppConfig.IsDebugging = chkDebug.Checked;
+
+            // Salva sul file JSON!
+            AppConfig.Save();
         }
 
         // --- PROCESSO 1: GENERAZIONE RIGHE ORDINE (CANONI) ---

@@ -27,6 +27,9 @@
     <Compile Update="Forms\FAskFiltriOrdiniConsuntivo.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Update="Forms\FPasswordPrompt.cs">
+      <SubType>Form</SubType>
+    </Compile>
   </ItemGroup>
 
 </Project>
