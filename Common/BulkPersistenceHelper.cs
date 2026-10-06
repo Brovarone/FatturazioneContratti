@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using EFCore.BulkExtensions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace FatturazioneContratti.Common
 {
@@ -18,10 +20,6 @@ namespace FatturazioneContratti.Common
 
     public static class BulkPersistenceHelper
     {
-        /// <summary>
-        /// Esegue un blocco di operazioni bulk all'interno di una transazione dedicata
-        /// con ottimizzazione SQL Server DBCC TRACEON(610) e TRACEOFF garantito in finally.
-        /// </summary>
         public static bool ExecuteInBulkTransaction(
             DbContext context,
             Action executeActions,
@@ -36,7 +34,6 @@ namespace FatturazioneContratti.Common
                 context.Database.ExecuteSqlRaw("DBCC TRACEON(610)");
                 traceOnExecuted = true;
 
-                // Esecuzione delle operazioni bulk passate dal chiamante
                 executeActions();
 
                 bulkTrans.Commit();
@@ -44,14 +41,7 @@ namespace FatturazioneContratti.Common
             }
             catch (Exception ex)
             {
-                try
-                {
-                    bulkTrans.Rollback();
-                }
-                catch (Exception rbEx)
-                {
-                    Debug.WriteLine($"[Rollback Fallito]: {rbEx.Message}");
-                }
+                try { bulkTrans.Rollback(); } catch (Exception rbEx) { Debug.WriteLine($"[Rollback Fallito]: {rbEx.Message}"); }
 
                 logBuilder?.AppendLine($"[Bulk Transaction Error]: {ex.Message}");
                 logBuilder?.AppendLine(ex.StackTrace);
@@ -64,7 +54,6 @@ namespace FatturazioneContratti.Common
                 {
                     try
                     {
-                        // Evita di sollevare eccezioni che maschererebbero l'errore originario del blocco try
                         if (context.Database.GetDbConnection().State == ConnectionState.Open)
                         {
                             context.Database.ExecuteSqlRaw("DBCC TRACEOFF(610)");
@@ -79,7 +68,14 @@ namespace FatturazioneContratti.Common
         }
 
         /// <summary>
-        /// Esegue il Bulk Insert/Update/InsertOrUpdate configurando batching e tracking statistiche standard.
+        /// Esegue la bulk operation in UNA sola chiamata.
+        ///
+        /// - Insert: prima di scrivere, ogni proprietà "non passata" (valore = default CLR) che nel
+        ///   modello ha un DEFAULT riceve quel default (vedi DbDefaults). Nessuna esclusione di colonne,
+        ///   nessun raggruppamento: tutte le righe hanno sempre tutte le colonne valorizzate.
+        /// - Update / InsertOrUpdate: le entità vengono scritte così come sono. I default NON vengono
+        ///   applicati, perché sovrascriverebbero valori reali che per caso valgono 0 / null.
+        ///   Se hai righe nuove, passale con BulkOperation.Insert.
         /// </summary>
         public static void BulkExecuteList<T>(
             DbContext context,
@@ -89,16 +85,17 @@ namespace FatturazioneContratti.Common
             string stepDescription = "",
             StringBuilder logBuilder = null) where T : class
         {
-            if (entityList == null || !entityList.Any()) return;
+            if (entityList == null || entityList.Count == 0) return;
 
-            int count = entityList.Count;
+            int count = entityList.Count;                       
+
             var bulkConfig = new BulkConfig
             {
-                SqlBulkCopyOptions = SqlBulkCopyOptions.KeepNulls,
+                SqlBulkCopyOptions = (SqlBulkCopyOptions)0,
                 BulkCopyTimeout = 0,
                 CalculateStats = true,
                 BatchSize = count < 5000 ? 0 : count / 10,
-                NotifyAfter = count / 10
+                NotifyAfter = Math.Max(1, count / 10)
             };
 
             switch (operation)
@@ -114,7 +111,7 @@ namespace FatturazioneContratti.Common
                     break;
             }
 
-            string msg = $"{tableName} ({stepDescription}) Ins:{bulkConfig.StatsInfo?.StatsNumberInserted} Agg:{bulkConfig.StatsInfo?.StatsNumberUpdated}";
+            string msg = $"{tableName} ({stepDescription}) Righe:{count} Ins:{bulkConfig.StatsInfo?.StatsNumberInserted} Agg:{bulkConfig.StatsInfo?.StatsNumberUpdated}";
             logBuilder?.AppendLine(msg);
             Debug.WriteLine(msg);
         }

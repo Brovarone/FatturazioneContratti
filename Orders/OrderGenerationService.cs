@@ -1,12 +1,15 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
 using EFCore.BulkExtensions;
 using EFMago.Models;
 using FatturazioneContratti.Common;
+using FatturazioneContratti.Config;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Data.Common;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Text;
 
 namespace FatturazioneContratti.Orders
 {
@@ -23,9 +26,12 @@ namespace FatturazioneContratti.Orders
 
         public bool GeneraRigheOrdine(
             FiltriOrdini filtri,
+            int dimensioneBlocco = 100,
             Action<string> logMessage = null,
             Action<string> updateStatus = null,
-            Action advanceProgress = null)
+            ProgressCallbacks? progress1 = null,
+            ProgressCallbacks? progress2 = null,
+            ProgressCallbacks? progress3 = null)
         {
             var bulkMessage = new StringBuilder();
             var errori = new StringBuilder();
@@ -38,12 +44,18 @@ namespace FatturazioneContratti.Orders
 
             try
             {
-                updateStatus?.Invoke("Precaricamento Tabelle");
-                PrecaricaTabelleOrdini();
+                //updateStatus?.Invoke("Precaricamento Tabelle");
+                //PrecaricaTabelleOrdini();
 
-                updateStatus?.Invoke("Estrazione ordini");
-                IQueryable<MaSaleOrd> query = _context.MaSaleOrd.AsQueryable();
+                updateStatus?.Invoke("Estrazione preliminare delle chiavi primarie...");
 
+                // -------------------------------------------------------------------------
+                // STEP 1: ESTRAZIONE SOLO DEGLI ID (Zero esplosione cartesiana, velocissimo)
+                // -------------------------------------------------------------------------
+                IQueryable<MaSaleOrd> query = _context.MaSaleOrd.AsNoTracking();
+
+
+                // Applicazione dei filtri di data sulla testa ordine
                 if (filtri.FiltroDateOrdini)
                 {
                     query = query.Where(o => o.OrderDate.HasValue
@@ -54,22 +66,32 @@ namespace FatturazioneContratti.Orders
                 {
                     query = query.Where(o => o.OrderDate.HasValue && o.OrderDate <= filtri.ToOrdDate);
                 }
+                // Filtri Divisione
+                if (filtri.DivisioneTecnologia) query = query.Where(o => o.Divisione == (int?)Divisione.Tecnologia);
+                if (filtri.DivisioneVigilanza) query = query.Where(o => o.Divisione == (int?)Divisione.Vigilanza);
 
+                // Filtri anagrafici e gestionali
                 if (filtri.SingoloCliente) query = query.Where(o => o.Customer == filtri.Cliente);
                 if (filtri.SingoloOrdine) query = query.Where(o => o.InternalOrdNo == filtri.NrOrd);
                 if (filtri.SingolaFiliale) query = query.Where(o => o.CostCenter == filtri.Filiale);
                 if (filtri.SingolaPriorita && int.TryParse(filtri.Priorita, out int pVal))
                     query = query.Where(o => o.Priority == pVal);
 
-                var allOrders = query.ToList();
-                if (!allOrders.Any())
+                // Eseguiamo la query materializzando SOLO i numeri interi degli ID ordini
+                var allOrderIds = query
+                    .OrderBy(o => o.SaleOrdId)
+                    .Select(o => o.SaleOrdId)
+                    .ToList();
+
+                //var allOrdersExplosion = query.ToList(); // <- posso ottenere subito l'esplosione
+                if (!allOrderIds.Any())
                 {
                     logMessage?.Invoke("Nessun ordine estratto con i filtri specificati.");
                     return true;
                 }
 
-                totOrdini = allOrders.Count;
-                string msgTot = $"Ordini Estratti : {totOrdini}";
+                totOrdini = allOrderIds.Count;
+                string msgTot = $"Trovati {totOrdini} ordini da elaborare"; // in blocchi da {dimensioneBlocco}.";
                 Debug.WriteLine(msgTot);
                 logMessage?.Invoke(msgTot);
                 updateStatus?.Invoke(msgTot);
@@ -84,185 +106,220 @@ namespace FatturazioneContratti.Orders
                 var taxDefault = codiciIva.FirstOrDefault(t => t.TaxCode == sDefCodIva);
                 double dDefPercIva = Math.Round((double)(taxDefault?.Perc ?? 0), DomainConstants.DecimaliPercentuale);
 
-                // Collezioni per il bulk insert finale
-                var efMaSaleOrd = new List<MaSaleOrd>();
-                var efMaSaleOrdDetails = new List<MaSaleOrdDetails>();
-                var efMaSaleOrdSummary = new List<MaSaleOrdSummary>();
-                var efAllordCliAcc = new List<AllordCliAcc>();
-                var efAllordCliAttivita = new List<AllordCliAttivita>();
-                var efAllordCliContratto = new List<AllordCliContratto>();
+                // COLLETTORE GLOBALE DELL'ELABORAZIONE (Resta in RAM fino alla fine)
+                var updateMaSaleOrd = new List<MaSaleOrd>();
+                var updateAllordCliContratto = new List<AllordCliContratto>();
+                var updateAllordCliAttivita = new List<AllordCliAttivita>();
+                var updateAllordCliAcc = new List<AllordCliAcc>();
+                var insertMaSaleOrdDetails = new List<MaSaleOrdDetails>();
 
-                // Ciclo Ordini
-                foreach (var o in allOrders)
+                // 1. INIZIALIZZAZIONE PROTOTIPI (Fuori dal ciclo, una volta sola!)
+                // L'AddNew estrae i default Fluent dal contesto e ti dà un oggetto perfetto
+                var protoMaSaleOrdDetails = _context.AddNew<MaSaleOrdDetails>();
+                var protoAllordCliAttivita = _context.AddNew<AllordCliAttivita>();
+
+
+                // -------------------------------------------------------------------------
+                // STEP 2: CICLO A BLOCCHI SULLA LISTA DI ID
+                // -------------------------------------------------------------------------
+                 // Calcola numero blocchi correttamente
+                int numeroBlocchi = (totOrdini + dimensioneBlocco - 1) / dimensioneBlocco;
+                progress1?.Init(0, Math.Max(1, numeroBlocchi)); // barra grande: un passo per blocco
+
+                for (int i = 0; i < totOrdini; i += dimensioneBlocco)
                 {
-                    advanceProgress?.Invoke();
-                    debugging.AppendLine($"Ordine: {o.InternalOrdNo}");
+                    int blockSize = Math.Min(dimensioneBlocco, totOrdini - i);
+                    progress2?.Init(0, Math.Max(1, blockSize)); // barra piccola: progresso dentro il blocco
 
-                    int iNewRowsCount = 0;
-                    bool isNewRows = false;
-                    bool isUpdateRows = false;
-                    int iNrRigheNota = 0;
-                    int iNrRigheAValore = 0;
-                    bool bScrittoDescrizioni = false;
+                    updateStatus?.Invoke($"Elaborazione blocco {i / dimensioneBlocco + 1} (Ordini {i + 1} - {Math.Min(i + dimensioneBlocco, totOrdini)} di {totOrdini})...");
+                    int[] blocId = allOrderIds.Skip(i).Take(blockSize).ToArray();
+                    // Chiamo il loader che gestisce la query con gli id
+                    if (AppConfig.IsDebugging) logMessage?.Invoke("[DEBUG ATTIVO] Avvio forzato della scansione ordine per ordine...");
+                    var allOrdersChunk = LoadOrdersChunkByOrIn(_context, blocId, AppConfig.IsDebugging, logMessage);
 
-                    var cOrd = new CurOrd(o);
-                    int curLastPosition = o.MaSaleOrdDetails.Any() ? o.MaSaleOrdDetails.Max(m => m.Position) : 0;
-
-                    if (o.ALLordCliContratto != null && o.ALLordCliContratto.Any())
+                    // Ciclo Ordini                    
+                    foreach (var o in allOrdersChunk)
                     {
-                        foreach (var c in o.ALLordCliContratto)
+                        progress2?.Advance(); // avanza la piccola per ogni ordine
+                        debugging.AppendLine($"Ordine: {o.InternalOrdNo}");
+
+                        int iNewRowsCount = 0;
+                        bool isNewRows = false;
+                        bool isUpdateRows = false;
+                        int iNrRigheNota = 0;
+                        int iNrRigheAValore = 0;
+                        bool bScrittoDescrizioni = false;
+
+                        var cOrd = new CurOrd(o);
+                        int curLastPosition = o.MaSaleOrdDetails.Any() ? o.MaSaleOrdDetails.Max(m => m.Position) : 0;
+
+                        if (o.ALLordCliContratto != null && o.ALLordCliContratto.Any())
                         {
-                            if (VerificaEsclusioneContratto(c, filtri, debugging, out bool isDaEscludere))
-                                continue;
-
-                            var taxRow = codiciIva.FirstOrDefault(t => t.TaxCode == c.CodiceIva);
-                            var cOrdRow = new CurOrdRow(c)
+                            foreach (var c in o.ALLordCliContratto)
                             {
-                                CanoneFuoriRangeDate = isDaEscludere,
-                                Contropartita = string.IsNullOrWhiteSpace(c.MaItems?.SaleOffset) ? sDefContropartita : c.MaItems.SaleOffset,
-                                CodIva = string.IsNullOrWhiteSpace(c.CodiceIva) ? sDefCodIva : c.CodiceIva,
-                                PercIva = Math.Round((double)(taxRow?.Perc ?? dDefPercIva), DomainConstants.DecimaliPercentuale),
-                                Parent = cOrd
-                            };
+                                if (VerificaEsclusioneContratto(c, filtri, debugging, out bool isDaEscludere))
+                                    continue;
 
-                            var attDaRifatturare = new List<AllordCliAttivita>();
-                            var attIstat = new List<AllordCliAttivita>();
-
-                            // Gestione Attività
-                            ElaboraAttivitaContratto(c, cOrdRow, filtri, attDaRifatturare, attIstat, efAllordCliAttivita, errori, debugging);
-
-                            // Controllo Scadenze Fisse e Cessazioni
-                            ElaboraScadenzeECessazioni(o, cOrd, cOrdRow, efAllordCliAcc, debugging);
-
-                            // Generazione Righe se idoneo
-                            if (!cOrdRow.PrecendementeCessato
-                                && ((cOrdRow.IsOk && !cOrdRow.CanoneFuoriRangeDate) || cOrdRow.DaRifatturare)
-                                && (cOrdRow.QtaCorrente > 0 || cOrdRow.QtaDaRifatturare > 0))
-                            {
-                                if (o.MaSaleOrdDetails.Count == 1 && CheckRigaBianca(o.MaSaleOrdDetails.First()))
+                                var taxRow = codiciIva.FirstOrDefault(t => t.TaxCode == c.CodiceIva);
+                                var cOrdRow = new CurOrdRow(c)
                                 {
-                                    cOrd.LastLine = 0;
-                                    curLastPosition = 0;
-                                }
+                                    CanoneFuoriRangeDate = isDaEscludere,
+                                    Contropartita = string.IsNullOrWhiteSpace(c.MaItems?.SaleOffset) ? sDefContropartita : c.MaItems.SaleOffset,
+                                    CodIva = string.IsNullOrWhiteSpace(c.CodiceIva) ? sDefCodIva : c.CodiceIva,
+                                    PercIva = Math.Round((double)(taxRow?.Perc ?? dDefPercIva), DomainConstants.DecimaliPercentuale),
+                                    Parent = cOrd
+                                };
 
-                                // Allineamento consegna per attività di rifatturazione
-                                foreach (var aDaRif in attDaRifatturare)
+                                var attDaRifatturare = new List<AllordCliAttivita>();
+                                var attIstat = new List<AllordCliAttivita>();
+
+                                // Gestione Attività
+                                ElaboraAttivitaContratto(c, cOrdRow, filtri, attDaRifatturare, attIstat, updateAllordCliAttivita, errori, debugging);
+
+                                // Controllo Scadenze Fisse e Cessazioni
+                                ElaboraScadenzeECessazioni(o, cOrd, cOrdRow, updateAllordCliAcc, debugging);
+
+                                // Generazione Righe se idoneo
+                                if (!cOrdRow.PrecendementeCessato
+                                    && ((cOrdRow.IsOk && !cOrdRow.CanoneFuoriRangeDate) || cOrdRow.DaRifatturare)
+                                    && (cOrdRow.QtaCorrente > 0 || cOrdRow.QtaDaRifatturare > 0))
                                 {
-                                    if (aDaRif.DataRifatturazione < cOrdRow.DataPrevistaConsegna)
+                                    if (o.MaSaleOrdDetails.Count == 1 && CheckRigaBianca(o.MaSaleOrdDetails.First()))
                                     {
-                                        if (!cOrdRow.CanoneFuoriRangeDate)
-                                            avvisi.AppendLine($"Ordine {cOrd.OrdNo} Servizio {cOrdRow.Item} con date prevista fatturazione non congruenti!");
-
-                                        cOrdRow.DataPrevistaConsegna = aDaRif.DataRifatturazione.Value;
-                                        cOrdRow.DataConfermaConsegna = aDaRif.DataRifatturazione.Value;
+                                        cOrd.LastLine = 0;
+                                        curLastPosition = 0;
                                     }
-                                }
 
-                                isNewRows = true;
-
-                                // Descrizione Testata Ordine
-                                if (!bScrittoDescrizioni && o.ALLordCliDescrizioni != null)
-                                {
-                                    bScrittoDescrizioni = true;
-                                    foreach (var d in o.ALLordCliDescrizioni)
+                                    // Allineamento consegna per attività di rifatturazione
+                                    foreach (var aDaRif in attDaRifatturare)
                                     {
-                                        iNewRowsCount++;
-                                        iNrRigheNota++;
-                                        efMaSaleOrdDetails.Add(CreaRigaDescrittiva(iNewRowsCount, cOrdRow, d.Descrizione));
-                                    }
-                                }
-
-                                // Righe da Rifatturare
-                                foreach (var aDaRif in attDaRifatturare)
-                                {
-                                    iNewRowsCount++;
-                                    iNrRigheAValore++;
-                                    efMaSaleOrdDetails.Add(CreaRigaRifatturazione(cOrd, cOrdRow, aDaRif, iNewRowsCount, (short)(curLastPosition + iNrRigheAValore), errori, debugging));
-                                }
-
-                                // Riga Canone / Servizio Effettiva
-                                if (!cOrdRow.CanoneFuoriRangeDate && cOrdRow.QtaCorrente > 0)
-                                {
-                                    // Riga Riferimento Contratto
-                                    iNewRowsCount++;
-                                    iNrRigheNota++;
-                                    string descriRif = (string.IsNullOrWhiteSpace(cOrdRow.ContrattoFox) ? string.Empty : $"Codice : {cOrdRow.ContrattoFox}") + $" Rif : {cOrdRow.Parent.OrdNo}";
-                                    efMaSaleOrdDetails.Add(CreaRigaRiferimento(cOrd, cOrdRow, descriRif.TrimStart(), iNewRowsCount, (short)(curLastPosition + iNrRigheAValore)));
-
-                                    // Righe Descrittive Contratto
-                                    if (c.AllordCliContrattoDescFatt != null)
-                                    {
-                                        foreach (var d in c.AllordCliContrattoDescFatt)
+                                        if (aDaRif.DataRifatturazione < cOrdRow.DataPrevistaConsegna)
                                         {
-                                            iNewRowsCount++;
-                                            iNrRigheNota++;
-                                            efMaSaleOrdDetails.Add(CreaRigaDescrittiva(iNewRowsCount, cOrdRow, d.Descrizione));
+                                            if (!cOrdRow.CanoneFuoriRangeDate)
+                                                avvisi.AppendLine($"Ordine {cOrd.OrdNo} Servizio {cOrdRow.Item} con date prevista fatturazione non congruenti!");
+
+                                            cOrdRow.DataPrevistaConsegna = aDaRif.DataRifatturazione.Value;
+                                            cOrdRow.DataConfermaConsegna = aDaRif.DataRifatturazione.Value;
                                         }
                                     }
 
-                                    // Dettaglio Valore
-                                    iNewRowsCount++;
-                                    iNrRigheAValore++;
-                                    efMaSaleOrdDetails.Add(CreaRigaServizioValore(c, cOrd, cOrdRow, iNewRowsCount, (short)(curLastPosition + iNrRigheAValore)));
+                                    isNewRows = true;
+                                    var newRow = protoMaSaleOrdDetails.CloneFromPrototype();
+                                    // Descrizione Testata Ordine
+                                    if (!bScrittoDescrizioni && o.ALLordCliDescrizioni != null)
+                                    {
+                                        bScrittoDescrizioni = true;
+                                        foreach (var d in o.ALLordCliDescrizioni)
+                                        {
+                                            iNewRowsCount++;
+                                            iNrRigheNota++;
+                                            newRow = protoMaSaleOrdDetails.CloneFromPrototype();
+                                            insertMaSaleOrdDetails.Add(CreaRigaDescrittiva(newRow, iNewRowsCount, cOrdRow, d.Descrizione));
+                                        }
+                                    }
+
+                                    // Righe da Rifatturare
+                                    foreach (var aDaRif in attDaRifatturare)
+                                    {
+                                        iNewRowsCount++;
+                                        iNrRigheAValore++;
+                                        newRow = protoMaSaleOrdDetails.CloneFromPrototype();
+                                        insertMaSaleOrdDetails.Add(CreaRigaRifatturazione(newRow, cOrd, cOrdRow, aDaRif, iNewRowsCount, (short)(curLastPosition + iNrRigheAValore), errori, debugging));
+                                    }
+
+                                    // Riga Canone / Servizio Effettiva
+                                    if (!cOrdRow.CanoneFuoriRangeDate && cOrdRow.QtaCorrente > 0)
+                                    {
+                                        // Riga Riferimento Contratto
+                                        iNewRowsCount++;
+                                        iNrRigheNota++;
+                                        newRow = protoMaSaleOrdDetails.CloneFromPrototype();
+                                        string descriRif = (string.IsNullOrWhiteSpace(cOrdRow.ContrattoFox) ? string.Empty : $"Codice : {cOrdRow.ContrattoFox}") + $" Rif : {cOrdRow.Parent.OrdNo}";
+                                        insertMaSaleOrdDetails.Add(CreaRigaRiferimento(newRow, cOrd, cOrdRow, descriRif.TrimStart(), iNewRowsCount, (short)(curLastPosition + iNrRigheAValore)));
+
+                                        // Righe Descrittive Contratto
+                                        if (c.AllordCliContrattoDescFatt != null)
+                                        {
+                                            foreach (var d in c.AllordCliContrattoDescFatt)
+                                            {
+                                                iNewRowsCount++;
+                                                iNrRigheNota++;
+                                                newRow = protoMaSaleOrdDetails.CloneFromPrototype();
+                                                insertMaSaleOrdDetails.Add(CreaRigaDescrittiva(newRow, iNewRowsCount, cOrdRow, d.Descrizione));
+                                            }
+                                        }
+
+                                        // Dettaglio Valore
+                                        iNewRowsCount++;
+                                        iNrRigheAValore++;
+                                        newRow = protoMaSaleOrdDetails.CloneFromPrototype();
+                                        insertMaSaleOrdDetails.Add(CreaRigaServizioValore(newRow, c, cOrd, cOrdRow, iNewRowsCount, (short)(curLastPosition + iNrRigheAValore)));
+                                    }
+
+                                    // Righe ISTAT
+                                    foreach (var aIst in attIstat)
+                                    {
+                                        iNewRowsCount++;
+                                        iNrRigheNota++;
+                                        newRow = protoMaSaleOrdDetails.CloneFromPrototype();
+                                        var rd = CreaRigaDescrittiva(newRow, iNewRowsCount, cOrdRow, aIst.TestoFattura);
+                                        insertMaSaleOrdDetails.Add(rd);
+                                        updateAllordCliAttivita.Add(aIst);
+                                    }
                                 }
 
-                                // Righe ISTAT
-                                foreach (var aIst in attIstat)
+                                // Aggiornamento date prossima fatturazione
+                                if (!cOrdRow.CanoneFuoriRangeDate
+                                    && (cOrdRow.IsOk || cOrdRow.DaRifatturare || cOrdRow.SospesoDaAttivita)
+                                    && !cOrdRow.PrecendementeCessato)
                                 {
-                                    iNewRowsCount++;
-                                    iNrRigheNota++;
-                                    var rd = CreaRigaDescrittiva(iNewRowsCount, cOrdRow, aIst.TestoFattura);
-                                    efMaSaleOrdDetails.Add(rd);
-                                    efAllordCliAttivita.Add(aIst);
+                                    if (cOrdRow.DataProssimaFattura < filtri.DataFattA)
+                                        avvisi.AppendLine($"Ordine {cOrd.OrdNo} Servizio {cOrdRow.Item} con data prossima fatturazione antecedente alla data di fine estrazione!");
+
+                                    c.DataProssimaFatt = cOrdRow.IsCampagna ? cOrdRow.DataProssimaFatturaCampagna : cOrdRow.DataProssimaFattura;
+                                    c.DataFineElaborazione = DateTime.Now;
+                                    c.Tbmodified = DateTime.Now;
+                                    c.TbmodifiedId = _loginId;
+                                    updateAllordCliContratto.Add(c);
+                                    isUpdateRows = true;
                                 }
-                            }
-
-                            // Aggiornamento date prossima fatturazione
-                            if (!cOrdRow.CanoneFuoriRangeDate
-                                && (cOrdRow.IsOk || cOrdRow.DaRifatturare || cOrdRow.SospesoDaAttivita)
-                                && !cOrdRow.PrecendementeCessato)
-                            {
-                                if (cOrdRow.DataProssimaFattura < filtri.DataFattA)
-                                    avvisi.AppendLine($"Ordine {cOrd.OrdNo} Servizio {cOrdRow.Item} con data prossima fatturazione antecedente alla data di fine estrazione!");
-
-                                c.DataProssimaFatt = cOrdRow.IsCampagna ? cOrdRow.DataProssimaFatturaCampagna : cOrdRow.DataProssimaFattura;
-                                c.DataFineElaborazione = DateTime.Now;
-                                c.Tbmodified = DateTime.Now;
-                                c.TbmodifiedId = _loginId;
-                                efAllordCliContratto.Add(c);
-                                isUpdateRows = true;
                             }
                         }
-                    }
 
-                    if (isNewRows)
-                    {
-                        o.Invoiced = "0";
-                        o.Delivered = "0";
-                        o.Picked = "0";
-                        o.LastSubId = cOrd.LastSubId + iNewRowsCount;
-                        o.Tbmodified = DateTime.Now;
-                        o.TbmodifiedId = _loginId;
-                        efMaSaleOrd.Add(o);
-                        totOrdiniConNuoveRighe++;
-                    }
+                        if (isNewRows)
+                        {
+                            o.Invoiced = "0";
+                            o.Delivered = "0";
+                            o.Picked = "0";
+                            o.LastSubId = cOrd.LastSubId + iNewRowsCount;
+                            o.Tbmodified = DateTime.Now;
+                            o.TbmodifiedId = _loginId;
+                            updateMaSaleOrd.Add(o);
+                            totOrdiniConNuoveRighe++;
+                        }
 
-                    if (isUpdateRows) totOrdiniConRigheAggiornate++;
+                        if (isUpdateRows) totOrdiniConRigheAggiornate++;
+                    }
+                    progress2?.Finish();   // fine blocco piccolo
+                    progress1?.Advance();  // un passo per il blocco completato
                 }
 
+                progress1?.Finish();
+
                 // Salvataggio Bulk
+                logMessage?.Invoke("Salvataggio su database ERP...");
                 EseguiSalvataggioTransazionale(
-                    totOrdiniConNuoveRighe,
-                    totOrdiniConRigheAggiornate,
-                    efMaSaleOrd,
-                    efMaSaleOrdDetails,
-                    efMaSaleOrdSummary,
-                    efAllordCliAcc,
-                    efAllordCliAttivita,
-                    efAllordCliContratto,
+                    updateMaSaleOrd.Count,
+                    updateAllordCliContratto.Count,
+                    updateMaSaleOrd,
+                    insertMaSaleOrdDetails,
+                    updateAllordCliAcc,
+                    updateAllordCliAttivita,
+                    updateAllordCliContratto,
                     bulkMessage,
                     errori,
                     logMessage);
+                logMessage?.Invoke("[COMPLETATO] Elaborazione a blocchi di ID conclusa con successo.");
             }
             catch (Exception ex)
             {
@@ -277,6 +334,134 @@ namespace FatturazioneContratti.Orders
         }
 
         #region Metodi di supporto estrazione e regole
+
+        /// <summary>
+        /// Carica un lotto ("chunk") di ordini di vendita (MaSaleOrd) comprensivo di tutto il grafo 
+        /// delle relazioni (Include/ThenInclude) necessarie per l'elaborazione dei contratti.
+        /// </summary>
+        /// <param name="context">Il contesto del database <see cref="FattureContext"/> corrente.</param>
+        /// <param name="ids">Array contenente gli identificativi univoci (<see cref="MaSaleOrd.SaleOrdId"/>) degli ordini da estrarre per il lotto corrente.</param>
+        /// <param name="isDebugMode">Se impostato su <c>true</c>, forza l'esecuzione atomica ordine per ordine per finalità di diagnostica preventiva.</param>
+        /// <param name="logMessage">Delegato opzionale per la notifica e il tracciamento dei messaggi di log o di errore sulla UI o su file.</param>
+        /// <returns>Una lista di oggetti <see cref="MaSaleOrd"/> completamente popolati e disaccoppiati dal Change Tracker.</returns>
+        /// <exception cref="System.Data.SqlTypes.SqlNullValueException">
+        /// Rilanciata in modalità fail-safe se viene intercettato un valore NULL non mappato nel database dell'ERP. 
+        /// Innesca automaticamente l'isolamento del record corrotto tramite scansione atomica.
+        /// </exception>
+        /// <exception cref="DbException">Rilanciata in caso di errori strutturali o di timeout lato SQL Server.</exception>
+        private static List<MaSaleOrd> LoadOrdersChunkByOrIn(FattureContext context, int[] ids, bool isDebugMode, Action<string> logMessage = null)
+        {
+            if (ids == null || ids.Length == 0) return new List<MaSaleOrd>();
+
+            // Definizione del grafo di query riutilizzabile sia per il batch che per l'isolamento atomico
+            IQueryable<MaSaleOrd> QueryBase(FattureContext ctx)
+            {
+                return ctx.MaSaleOrd
+                    .AsNoTracking()
+                    .Include(o => o.ALLOrdCliAcc)
+                    .Include(o => o.ALLordCliDescrizioni)
+                    .Include(o => o.MaSaleOrdDetails)
+                    .Include(o => o.ALLordCliContratto)
+                        .ThenInclude(c => c.MaItems)
+                    .Include(o => o.ALLordCliContratto)
+                        .ThenInclude(c => c.AlltipoRigaServizio)
+                    .Include(o => o.ALLordCliContratto)
+                        .ThenInclude(c => c.AllordCliContrattoDescFatt)
+                    .Include(o => o.ALLordCliContratto)
+                        .ThenInclude(c => c.AllordCliAttivita)
+                            .ThenInclude(a => a.Allattivita)
+                    // opzionale: evita query singola troppo pesante
+                    .AsSplitQuery();
+            }
+
+            // Se il debug è forzato a monte, saltiamo direttamente alla modalità di scansione atomica
+            if (isDebugMode)
+            {
+                // logMessage?.Invoke("[DEBUG ATTIVO] Avvio forzato della scansione ordine per ordine...");
+                EseguiScansioneDiagnostica(context, ids, QueryBase, logMessage);
+            }
+
+            try
+            {
+                // Costruisci query con tutti gli Include che vuoi (modifica qui per aggiungere/togliere)
+                var query = QueryBase(context);
+
+                // Costruisci predicate: (SaleOrdId == id0) OR (SaleOrdId == id1) OR ...
+                var param = Expression.Parameter(typeof(MaSaleOrd), "o");
+                var prop = Expression.PropertyOrField(param, nameof(MaSaleOrd.SaleOrdId));
+
+                Expression? predicate = null;
+                foreach (var id in ids)
+                {
+                    var equals = Expression.Equal(prop, Expression.Constant(id));
+                    predicate = predicate == null ? equals : Expression.OrElse(predicate, equals);
+                }
+
+                if (predicate == null)
+                    return new List<MaSaleOrd>();
+
+                var lambda = Expression.Lambda<Func<MaSaleOrd, bool>>(predicate, param);
+                var finalQuery = query.Where(lambda);
+
+                return finalQuery.ToList();
+            }
+
+            catch (Exception ex) when (ex is System.Data.SqlTypes.SqlNullValueException ||
+                               ex.InnerException is System.Data.SqlTypes.SqlNullValueException ||
+                               ex.Message.Contains("Null") || ex.InnerException?.Message.Contains("Null") == true)
+            {
+                // Se non eravamo in modalità debug ma intercettiamo il crash del record NULL, attiviamo la diagnostica
+                logMessage?.Invoke("!!! [CRASH RILEVATO] Rilevata anomalia SqlNullValueException nel blocco. Attivazione isolamento...");
+                EseguiScansioneDiagnostica(context, ids, QueryBase, logMessage);
+                throw;
+            }
+            catch (DbException dbEx)
+            {
+                logMessage?.Invoke($"DB error in LoadOrdersChunkByOrIn: {dbEx.Message}");
+                Debug.WriteLine(dbEx);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logMessage?.Invoke($"Unexpected error in LoadOrdersChunkByOrIn: {ex.Message}");
+                Debug.WriteLine(ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Esegue la query un ID alla volta per catturare matematicamente il record che ospita il NULL corrotto.
+        /// </summary>
+        private static void EseguiScansioneDiagnostica(
+            FattureContext context,
+            int[] ids,
+            Func<FattureContext, IQueryable<MaSaleOrd>> queryBuilder,
+            Action<string> logMessage)
+        {
+            foreach (var singoloId in ids)
+            {
+                try
+                {
+                    // Carica l'ordine singolo eseguendo tutte le Include speculari
+                    var singleQuery = queryBuilder(context);
+                    var testRecord = singleQuery.FirstOrDefault(o => o.SaleOrdId == singoloId);
+                }
+                catch (Exception exAtomica)
+                {
+                    string erroreCritico = $"**********************************************************************\n" +
+                                           $"!!! [IDENTIFICATO RECORD CORROTTO] !!!\n" +
+                                           $"L'ordine ERP con l'esatto SaleOrdId: {singoloId} contiene un valore NULL non mappato.\n" +
+                                           $"Messaggio Eccezione: {exAtomica.Message}\n" +
+                                           $"**********************************************************************";
+
+                    logMessage?.Invoke(erroreCritico);
+                    Debug.WriteLine(erroreCritico);
+
+                    // Rilanciamo un'eccezione esplicita bloccante contenente l'ID individuato
+                    throw new Exception($"Elaborazione interrotta. Trovato record orfano/nullo su SaleOrdId: {singoloId}.", exAtomica);
+                }
+            }
+        }
 
         private void PrecaricaTabelleOrdini()
         {
@@ -493,91 +678,91 @@ namespace FatturazioneContratti.Orders
 
         #region Costruzione record MaSaleOrdDetails
 
-        private MaSaleOrdDetails CreaRigaDescrittiva(int iNewRowsCount, CurOrdRow cOrdRow, string descrizione)
+        private MaSaleOrdDetails CreaRigaDescrittiva(MaSaleOrdDetails riga, // Riceve la copia pulita dal prototipo,
+                int iNewRowsCount, CurOrdRow cOrdRow, string descrizione)
         {
-            return new MaSaleOrdDetails
-            {
-                Line = (short)(cOrdRow.Parent.LastLine + iNewRowsCount),
-                Position = 0,
-                SubId = cOrdRow.Parent.LastSubId + iNewRowsCount,
-                SaleOrdId = cOrdRow.Parent.SaleOrdId,
-                LineType = (int)LineType.Nota,
-                Description = descrizione,
-                InEi = "1",
-                ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna,
-                ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna,
-                InternalOrdNo = cOrdRow.Parent.OrdNo,
-                Customer = cOrdRow.Parent.Cliente,
-                OrderDate = cOrdRow.Parent.OrdDate,
-                Tbcreated = DateTime.Now,
-                Tbmodified = DateTime.Now,
-                TbcreatedId = _loginId,
-                TbmodifiedId = _loginId,
-                Item = string.Empty,
-                UoM = string.Empty,
-                Qty = 0,
-                UnitValue = 0,
-                TaxableAmount = 0,
-                TotalAmount = 0,
-                PacksUoM = string.Empty,
-                TaxCode = string.Empty,
-                Job = string.Empty,
-                CostCenter = string.Empty,
-                Offset = string.Empty,
-                Notes = string.Empty,
-                NetPrice = 0,
-                ContractCode = string.Empty,
-                ProjectCode = string.Empty,
-                AllNrCanoni = 0,
-                AllCanoniDataI = DomainConstants.DataNulla,
-                AllCanoniDataF = DomainConstants.DataNulla,
-                Invoiced = "0"
-            };
+            riga.Line = (short)(cOrdRow.Parent.LastLine + iNewRowsCount);
+            riga.Position = 0;
+            riga.SubId = cOrdRow.Parent.LastSubId + iNewRowsCount;
+            riga.SaleOrdId = cOrdRow.Parent.SaleOrdId;
+            riga.LineType = (int)LineType.Nota;
+            riga.Description = descrizione;
+            riga.InEi = "1";
+            riga.ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna;
+            riga.ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna;
+            riga.InternalOrdNo = cOrdRow.Parent.OrdNo;
+            riga.Customer = cOrdRow.Parent.Cliente;
+            riga.OrderDate = cOrdRow.Parent.OrdDate;
+            riga.Tbcreated = DateTime.Now;
+            riga.Tbmodified = DateTime.Now;
+            riga.TbcreatedId = _loginId;
+            riga.TbmodifiedId = _loginId;
+            riga.Item = string.Empty;
+            riga.UoM = string.Empty;
+            riga.Qty = 0;
+            riga.UnitValue = 0;
+            riga.TaxableAmount = 0;
+            riga.TotalAmount = 0;
+            riga.PacksUoM = string.Empty;
+            riga.TaxCode = string.Empty;
+            riga.Job = string.Empty;
+            riga.CostCenter = string.Empty;
+            riga.Offset = string.Empty;
+            riga.Notes = string.Empty;
+            riga.NetPrice = 0;
+            riga.ContractCode = string.Empty;
+            riga.ProjectCode = string.Empty;
+            riga.AllNrCanoni = 0;
+            riga.AllCanoniDataI = DomainConstants.DataNulla;
+            riga.AllCanoniDataF = DomainConstants.DataNulla;
+            riga.Invoiced = "0";
+
+            return riga;
         }
 
-        private MaSaleOrdDetails CreaRigaRiferimento(CurOrd cOrd, CurOrdRow cOrdRow, string descriRif, int iNewRowsCount, short pos)
+        private MaSaleOrdDetails CreaRigaRiferimento(MaSaleOrdDetails riga, CurOrd cOrd, CurOrdRow cOrdRow, string descriRif, int iNewRowsCount, short pos)
         {
-            return new MaSaleOrdDetails
-            {
-                Line = (short)(cOrd.LastLine + iNewRowsCount),
-                Position = pos,
-                SubId = cOrd.LastSubId + iNewRowsCount,
-                SaleOrdId = cOrd.SaleOrdId,
-                LineType = (int)LineType.Riferimento,
-                Description = descriRif,
-                InEi = "1",
-                ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna,
-                ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna,
-                InternalOrdNo = cOrdRow.Parent.OrdNo,
-                Customer = cOrdRow.Parent.Cliente,
-                OrderDate = cOrdRow.Parent.OrdDate,
-                Tbcreated = DateTime.Now,
-                Tbmodified = DateTime.Now,
-                TbcreatedId = _loginId,
-                TbmodifiedId = _loginId,
-                Item = string.Empty,
-                UoM = string.Empty,
-                Qty = 0,
-                UnitValue = 0,
-                TaxableAmount = 0,
-                TotalAmount = 0,
-                PacksUoM = string.Empty,
-                TaxCode = string.Empty,
-                Job = string.Empty,
-                CostCenter = string.Empty,
-                Offset = string.Empty,
-                Notes = string.Empty,
-                NetPrice = 0,
-                ContractCode = string.Empty,
-                ProjectCode = string.Empty,
-                AllNrCanoni = 0,
-                AllCanoniDataI = DomainConstants.DataNulla,
-                AllCanoniDataF = DomainConstants.DataNulla,
-                Invoiced = "0"
-            };
+            riga.Line = (short)(cOrd.LastLine + iNewRowsCount);
+            riga.Position = pos;
+            riga.SubId = cOrd.LastSubId + iNewRowsCount;
+            riga.SaleOrdId = cOrd.SaleOrdId;
+            riga.LineType = (int)LineType.Riferimento;
+            riga.Description = descriRif;
+            riga.InEi = "1";
+            riga.ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna;
+            riga.ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna;
+            riga.InternalOrdNo = cOrdRow.Parent.OrdNo;
+            riga.Customer = cOrdRow.Parent.Cliente;
+            riga.OrderDate = cOrdRow.Parent.OrdDate;
+            riga.Tbcreated = DateTime.Now;
+            riga.Tbmodified = DateTime.Now;
+            riga.TbcreatedId = _loginId;
+            riga.TbmodifiedId = _loginId;
+            riga.Item = string.Empty;
+            riga.UoM = string.Empty;
+            riga.Qty = 0;
+            riga.UnitValue = 0;
+            riga.TaxableAmount = 0;
+            riga.TotalAmount = 0;
+            riga.PacksUoM = string.Empty;
+            riga.TaxCode = string.Empty;
+            riga.Job = string.Empty;
+            riga.CostCenter = string.Empty;
+            riga.Offset = string.Empty;
+            riga.Notes = string.Empty;
+            riga.NetPrice = 0;
+            riga.ContractCode = string.Empty;
+            riga.ProjectCode = string.Empty;
+            riga.AllNrCanoni = 0;
+            riga.AllCanoniDataI = DomainConstants.DataNulla;
+            riga.AllCanoniDataF = DomainConstants.DataNulla;
+            riga.Invoiced = "0";
+
+            return riga;
         }
 
         private MaSaleOrdDetails CreaRigaRifatturazione(
+            MaSaleOrdDetails riga,
             CurOrd cOrd,
             CurOrdRow cOrdRow,
             AllordCliAttivita aDaRif,
@@ -598,46 +783,46 @@ namespace FatturazioneContratti.Orders
             double taxable = Math.Round(qty * valUnit, DomainConstants.DecimaliTasse);
             double total = Math.Round(taxable * ((100 + cOrdRow.PercIva) / 100), DomainConstants.DecimaliTasse);
 
-            return new MaSaleOrdDetails
-            {
-                Line = (short)(cOrd.LastLine + iNewRowsCount),
-                Position = pos,
-                SubId = cOrd.LastSubId + iNewRowsCount,
-                SaleOrdId = cOrd.SaleOrdId,
-                LineType = (int)LineType.Servizio,
-                Item = cOrdRow.Item,
-                Description = string.IsNullOrWhiteSpace(cOrdRow.Description) ? periodoRif : $"{cOrdRow.Description} {periodoRif}",
-                UoM = cOrdRow.UoM,
-                PacksUoM = cOrdRow.UoM,
-                Qty = qty,
-                UnitValue = valUnit,
-                NetPrice = valUnit,
-                TaxableAmount = taxable,
-                TaxCode = cOrdRow.CodIva,
-                TotalAmount = total,
-                ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna,
-                ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna,
-                AllNrCanoni = qty,
-                AllCanoniDataI = dataInizio,
-                AllCanoniDataF = dataFine,
-                Invoiced = "0",
-                Notes = SubstringSafe(aDaRif.Nota, 32),
-                Job = cOrd.Commessa,
-                CostCenter = cOrd.CdC,
-                ContractCode = cOrd.CIG,
-                ProjectCode = cOrd.CUP,
-                Offset = cOrdRow.Contropartita,
-                InternalOrdNo = cOrd.OrdNo,
-                Customer = cOrd.Cliente,
-                OrderDate = cOrd.OrdDate,
-                Tbcreated = DateTime.Now,
-                Tbmodified = DateTime.Now,
-                TbcreatedId = _loginId,
-                TbmodifiedId = _loginId
-            };
+            riga.Line = (short)(cOrd.LastLine + iNewRowsCount);
+            riga.Position = pos;
+            riga.SubId = cOrd.LastSubId + iNewRowsCount;
+            riga.SaleOrdId = cOrd.SaleOrdId;
+            riga.LineType = (int)LineType.Servizio;
+            riga.Item = cOrdRow.Item;
+            riga.Description = string.IsNullOrWhiteSpace(cOrdRow.Description) ? periodoRif : $"{cOrdRow.Description} {periodoRif}";
+            riga.UoM = cOrdRow.UoM;
+            riga.PacksUoM = cOrdRow.UoM;
+            riga.Qty = qty;
+            riga.UnitValue = valUnit;
+            riga.NetPrice = valUnit;
+            riga.TaxableAmount = taxable;
+            riga.TaxCode = cOrdRow.CodIva;
+            riga.TotalAmount = total;
+            riga.ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna;
+            riga.ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna;
+            riga.AllNrCanoni = qty;
+            riga.AllCanoniDataI = dataInizio;
+            riga.AllCanoniDataF = dataFine;
+            riga.Invoiced = "0";
+            riga.Notes = SubstringSafe(aDaRif.Nota, 32);
+            riga.Job = cOrd.Commessa;
+            riga.CostCenter = cOrd.CdC;
+            riga.ContractCode = cOrd.CIG;
+            riga.ProjectCode = cOrd.CUP;
+            riga.Offset = cOrdRow.Contropartita;
+            riga.InternalOrdNo = cOrd.OrdNo;
+            riga.Customer = cOrd.Cliente;
+            riga.OrderDate = cOrd.OrdDate;
+            riga.Tbcreated = DateTime.Now;
+            riga.Tbmodified = DateTime.Now;
+            riga.TbcreatedId = _loginId;
+            riga.TbmodifiedId = _loginId;
+
+            return riga;
         }
 
         private MaSaleOrdDetails CreaRigaServizioValore(
+            MaSaleOrdDetails riga,
             AllordCliContratto c,
             CurOrd cOrd,
             CurOrdRow cOrdRow,
@@ -691,43 +876,42 @@ namespace FatturazioneContratti.Orders
             double taxable = Math.Round(qty * unitVal, DomainConstants.DecimaliTasse);
             double total = Math.Round(taxable * ((100 + cOrdRow.PercIva) / 100), DomainConstants.DecimaliTasse);
 
-            return new MaSaleOrdDetails
-            {
-                Line = (short)(cOrd.LastLine + iNewRowsCount),
-                Position = pos,
-                SubId = cOrd.LastSubId + iNewRowsCount,
-                SaleOrdId = cOrd.SaleOrdId,
-                LineType = (int)LineType.Servizio,
-                Item = cOrdRow.Item,
-                Description = descrizioneFinale,
-                UoM = cOrdRow.UoM,
-                PacksUoM = cOrdRow.UoM,
-                Qty = qty,
-                UnitValue = unitVal,
-                NetPrice = unitVal,
-                TaxableAmount = taxable,
-                TaxCode = cOrdRow.CodIva,
-                TotalAmount = total,
-                ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna,
-                ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna,
-                AllNrCanoni = qty,
-                AllCanoniDataI = cOrdRow.PeriodoDataIn,
-                AllCanoniDataF = cOrdRow.PeriodoDataFin,
-                Invoiced = "0",
-                Notes = SubstringSafe(c.Nota, 32),
-                Job = cOrd.Commessa,
-                CostCenter = cOrd.CdC,
-                ContractCode = cOrd.CIG,
-                ProjectCode = cOrd.CUP,
-                Offset = cOrdRow.Contropartita,
-                InternalOrdNo = cOrd.OrdNo,
-                Customer = cOrd.Cliente,
-                OrderDate = cOrd.OrdDate,
-                Tbcreated = DateTime.Now,
-                Tbmodified = DateTime.Now,
-                TbcreatedId = _loginId,
-                TbmodifiedId = _loginId
-            };
+            riga.Line = (short)(cOrd.LastLine + iNewRowsCount);
+            riga.Position = pos;
+            riga.SubId = cOrd.LastSubId + iNewRowsCount;
+            riga.SaleOrdId = cOrd.SaleOrdId;
+            riga.LineType = (int)LineType.Servizio;
+            riga.Item = cOrdRow.Item;
+            riga.Description = descrizioneFinale;
+            riga.UoM = cOrdRow.UoM;
+            riga.PacksUoM = cOrdRow.UoM;
+            riga.Qty = qty;
+            riga.UnitValue = unitVal;
+            riga.NetPrice = unitVal;
+            riga.TaxableAmount = taxable;
+            riga.TaxCode = cOrdRow.CodIva;
+            riga.TotalAmount = total;
+            riga.ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna;
+            riga.ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna;
+            riga.AllNrCanoni = qty;
+            riga.AllCanoniDataI = cOrdRow.PeriodoDataIn;
+            riga.AllCanoniDataF = cOrdRow.PeriodoDataFin;
+            riga.Invoiced = "0";
+            riga.Notes = SubstringSafe(c.Nota, 32);
+            riga.Job = cOrd.Commessa;
+            riga.CostCenter = cOrd.CdC;
+            riga.ContractCode = cOrd.CIG;
+            riga.ProjectCode = cOrd.CUP;
+            riga.Offset = cOrdRow.Contropartita;
+            riga.InternalOrdNo = cOrd.OrdNo;
+            riga.Customer = cOrd.Cliente;
+            riga.OrderDate = cOrd.OrdDate;
+            riga.Tbcreated = DateTime.Now;
+            riga.Tbmodified = DateTime.Now;
+            riga.TbcreatedId = _loginId;
+            riga.TbmodifiedId = _loginId;
+
+            return riga;
         }
 
         private static bool CheckRigaBianca(MaSaleOrdDetails d)
@@ -757,7 +941,7 @@ namespace FatturazioneContratti.Orders
             int totAggiornate,
             List<MaSaleOrd> ordini,
             List<MaSaleOrdDetails> details,
-            List<MaSaleOrdSummary> summaries,
+            //List<MaSaleOrdSummary> summaries,
             List<AllordCliAcc> accessorie,
             List<AllordCliAttivita> attivita,
             List<AllordCliContratto> contratti,
@@ -770,9 +954,9 @@ namespace FatturazioneContratti.Orders
             bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_context, () =>
             {
                 BulkPersistenceHelper.BulkExecuteList(_context, ordini, "MaSaleOrd", BulkOperation.Update, "teste ordini", bulkMessage);
-                BulkPersistenceHelper.BulkExecuteList(_context, details, "MaSaleOrdDetails", BulkOperation.InsertOrUpdate, "righe ordini", bulkMessage);
-                BulkPersistenceHelper.BulkExecuteList(_context, summaries, "MaSaleOrdSummary", BulkOperation.InsertOrUpdate, "totali ordini", bulkMessage);
-                BulkPersistenceHelper.BulkExecuteList(_context, accessorie, "AllordCliAcc", BulkOperation.InsertOrUpdate, "dati accessori ordini", bulkMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, details, "MaSaleOrdDetails", BulkOperation.Insert, "righe ordini", bulkMessage);
+                //BulkPersistenceHelper.BulkExecuteList(_context, summaries, "MaSaleOrdSummary", BulkOperation.InsertOrUpdate, "totali ordini", bulkMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, accessorie, "AllordCliAcc", BulkOperation.Update, "dati accessori ordini", bulkMessage);
                 BulkPersistenceHelper.BulkExecuteList(_context, attivita, "AllordCliAttivita", BulkOperation.Update, "righe attività", bulkMessage);
                 BulkPersistenceHelper.BulkExecuteList(_context, contratti, "AllordCliContratto", BulkOperation.Update, "righe contratto", bulkMessage);
             }, logMessage, errori);

@@ -28,7 +28,7 @@ namespace FatturazioneContratti.Forms
 
         private void FAskFiltriOrdini_Load(object sender, EventArgs e)
         {
-            this.Size = new Size(504, 400);
+            // this.Size = new Size(504, 400);
             ToolTip1 = new ToolTip();
 
             if (IsIstat)

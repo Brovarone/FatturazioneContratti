@@ -216,14 +216,6 @@ namespace EFMago.Models
 
                 entity.Property(e => e.TbmodifiedId).HasColumnName("TBModifiedID");
 
-                // AGGIUNTO DA ME SU CAMPO NON CHIAVE ( aggiungo HasPrincipalKey)
-                entity.HasOne(d => d.AllordCliAttivita)
-                    .WithOne(p => p.Allattivita)
-                    .HasForeignKey<Allattivita>(d => d.Attivita)
-                    .HasPrincipalKey<AllordCliAttivita>(p => p.Attivita)
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_AllAttivita_Attivita_00");
-
             });
             modelBuilder.Entity<Allcespiti>(entity =>
             {
@@ -512,6 +504,7 @@ namespace EFMago.Models
                     .HasDefaultValueSql("((0))");
 
                 // AGGIUNTO DA ME
+                // Collegamento esistente alla testa ordine
                 entity.HasOne(d => d.SaleOrd)
                    .WithMany(p => p.AllordCliAttivita)
                    .HasForeignKey(d => d.IdOrdCli)
@@ -522,7 +515,14 @@ namespace EFMago.Models
                     .WithMany(p => p.AllordCliAttivita)
                     .HasForeignKey(d => new { d.IdOrdCli, d.RifLinea })
                     .OnDelete(DeleteBehavior.ClientSetNull);
-                //.HasPrincipalKey<AllordCliContratto>(p => new { p.IdOrdCli, p.Line })
+
+                // "Ogni riga attività del contratto (d) ha UN'attività anagrafica (Allattivita), 
+                // l'anagrafica (p) ha MOLTE righe attività collegate (AllordCliAttivita)"
+                entity.HasOne(d => d.Allattivita)
+                    .WithMany(p => p.AllordCliAttivita)
+                    .HasForeignKey(d => d.Attivita)
+                    .OnDelete(DeleteBehavior.ClientSetNull)
+                    .HasConstraintName("FK_AllordCliAttivita_AllAttivita");
 
             });
             modelBuilder.Entity<AllordCliContratto>(entity =>
@@ -537,6 +537,12 @@ namespace EFMago.Models
                   .HasMaxLength(8)
                   .IsUnicode(false)
                   .HasDefaultValueSql("('')");
+
+                entity.Property(e => e.CodiceIva)
+                    .HasColumnName("CodiceIva")
+                    .HasMaxLength(4) 
+                    .IsUnicode(false)
+                    .HasDefaultValueSql("('')");
 
                 entity.Property(e => e.CodContratto)
                   .HasColumnName("CodContratto")
@@ -1620,7 +1626,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_CustomerCtg");
 
                 entity.HasIndex(e => e.Description)
-                    .HasName("MA_CustomerCtg2");
+                    .HasDatabaseName("MA_CustomerCtg2");
 
                 entity.Property(e => e.Category)
                     .HasMaxLength(8)
@@ -1694,10 +1700,10 @@ namespace EFMago.Models
                 entity.ToTable("MA_DeclarationOfIntent");
 
                 entity.HasIndex(e => new { e.CustSuppType, e.DeclDate, e.LogNo })
-                    .HasName("MA_DeclarationOfIntent3");
+                    .HasDatabaseName("MA_DeclarationOfIntent3");
 
                 entity.HasIndex(e => new { e.CustSuppType, e.DeclYear, e.LogNo })
-                    .HasName("MA_DeclarationOfIntent2");
+                    .HasDatabaseName("MA_DeclarationOfIntent2");
 
                 entity.Property(e => e.DeclId).ValueGeneratedNever();
 
@@ -1879,19 +1885,18 @@ namespace EFMago.Models
                 entity.ToTable("MA_CustSupp");
 
                 entity.HasIndex(e => e.CustSuppBank)
-                    .HasName("MA_CustSupp6");
+                    .HasDatabaseName("MA_CustSupp6");
 
                 entity.HasIndex(e => e.TaxIdNumber)
-                    .HasName("MA_CustSupp5");
-
+                    .HasDatabaseName("MA_CustSupp5");
                 entity.HasIndex(e => new { e.CustSuppType, e.CompanyName })
-                    .HasName("MA_CustSupp2");
+                    .HasDatabaseName("MA_CustSupp2");
 
                 entity.HasIndex(e => new { e.CustSuppType, e.FiscalCode })
-                    .HasName("MA_CustSupp4");
+                    .HasDatabaseName("MA_CustSupp4");
 
                 entity.HasIndex(e => new { e.CustSuppType, e.TaxIdNumber })
-                    .HasName("MA_CustSupp3");
+                    .HasDatabaseName("MA_CustSupp3");
 
                 entity.Property(e => e.CustSupp)
                     .HasMaxLength(12)
@@ -2650,7 +2655,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_CustSuppBlackList");
 
                 entity.HasIndex(e => new { e.Grouping, e.CustSuppType, e.CustSupp, e.CreditNotesPrevPeriod, e.CreditNotesPrevYear })
-                    .HasName("IX_MA_CustSuppBlackList");
+                    .HasDatabaseName("IX_MA_CustSuppBlackList");
 
                 entity.Property(e => e.CustSupp)
                     .HasMaxLength(12)
@@ -2723,7 +2728,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_CustSuppBranches");
 
                 entity.HasIndex(e => e.TaxIdNumber)
-                    .HasName("MA_CustSuppBranches2");
+                    .HasDatabaseName("MA_CustSuppBranches2");
 
                 entity.Property(e => e.CustSupp)
                     .HasMaxLength(12)
@@ -4646,7 +4651,7 @@ namespace EFMago.Models
                 entity.ToTable("IM_SuppliersDiscounts");
 
                 entity.HasIndex(e => new { e.Producer, e.ProductCtg, e.ProductSubCtg, e.CustSuppType, e.CustSupp })
-                    .HasName("IM_SuppliersDiscounts_2");
+                    .HasDatabaseName("IM_SuppliersDiscounts_2");
 
                 entity.Property(e => e.CustSuppType).HasDefaultValueSql("((3211265))");
 
@@ -4865,17 +4870,17 @@ namespace EFMago.Models
 
                 entity.Property(e => e.TbmodifiedId).HasColumnName("TBModifiedID");
 
-               /* entity.HasOne(d => d.cust)
-                    .WithMany(p => p.MaCreditCustomerDocument)
-                    .HasForeignKey(d => new { d.CustSuppType, d.Customer })
-                    .OnDelete(DeleteBehavior.ClientSetNull)
-                    .HasConstraintName("FK_MA_CreditCustomerDoc_00");
-               */
+                /* entity.HasOne(d => d.cust)
+                     .WithMany(p => p.MaCreditCustomerDocument)
+                     .HasForeignKey(d => new { d.CustSuppType, d.Customer })
+                     .OnDelete(DeleteBehavior.ClientSetNull)
+                     .HasConstraintName("FK_MA_CreditCustomerDoc_00");
+                */
             });
 
             #endregion
             #region MaSaleDoc
-            
+
             modelBuilder.Entity<MaSaleDoc>(entity =>
             {
                 entity.HasKey(e => e.SaleDocId)
@@ -4885,34 +4890,34 @@ namespace EFMago.Models
                 entity.ToTable("MA_SaleDoc");
 
                 entity.HasIndex(e => e.CorrectionDocument)
-                    .HasName("MA_SaleDocc");
+                    .HasDatabaseName("MA_SaleDocc");
 
                 entity.HasIndex(e => e.JournalEntryId)
-                    .HasName("MA_SaleDoc8");
+                    .HasDatabaseName("MA_SaleDoc8");
 
                 entity.HasIndex(e => new { e.DocumentType, e.DocumentDate, e.DocNo })
-                    .HasName("MA_SaleDoc3");
+                    .HasDatabaseName("MA_SaleDoc3");
 
                 entity.HasIndex(e => new { e.PostedToCommissionEntries, e.DocumentDate, e.Salesperson })
-                    .HasName("MA_SaleDoc6");
+                    .HasDatabaseName("MA_SaleDoc6");
 
                 entity.HasIndex(e => new { e.DocumentType, e.DocumentDate, e.CustSuppType, e.CustSupp })
-                    .HasName("MA_SaleDoc4");
+                    .HasDatabaseName("MA_SaleDoc4");
 
                 entity.HasIndex(e => new { e.IncludedInTurnover, e.CustSuppType, e.CustSupp, e.DocumentDate })
-                    .HasName("MA_SaleDoc5");
+                    .HasDatabaseName("MA_SaleDoc5");
 
                 entity.HasIndex(e => new { e.StubBook, e.DocNo, e.DocumentDate, e.DocumentType })
-                    .HasName("MA_SaleDoca");
+                    .HasDatabaseName("MA_SaleDoca");
 
                 entity.HasIndex(e => new { e.TaxJournal, e.DocNo, e.DocumentDate, e.DocumentType })
-                    .HasName("MA_SaleDocb");
+                    .HasDatabaseName("MA_SaleDocb");
 
                 entity.HasIndex(e => new { e.DocumentType, e.Issued, e.InvoiceFollows, e.Summarized, e.DepartureDate, e.CustSuppType, e.CustSupp })
-                    .HasName("MA_SaleDoc2");
+                    .HasDatabaseName("MA_SaleDoc2");
 
                 entity.HasIndex(e => new { e.DocumentType, e.Issued, e.InvoiceFollows, e.Summarized, e.DepartureDate, e.CustSuppType, e.InvoicingCustomer })
-                    .HasName("MA_SaleDoc7");
+                    .HasDatabaseName("MA_SaleDoc7");
 
                 entity.Property(e => e.SaleDocId).ValueGeneratedNever();
 
@@ -5749,20 +5754,20 @@ namespace EFMago.Models
                 entity.ToTable("MA_SaleDocDetail");
 
                 entity.HasIndex(e => e.Trid)
-                    .HasName("MA_SaleDocDetail5");
+                    .HasDatabaseName("MA_SaleDocDetail5");
 
                 entity.HasIndex(e => new { e.DocumentType, e.Job })
-                    .HasName("MA_SaleDocDetail_IM1")
+                    .HasDatabaseName("MA_SaleDocDetail_IM1")
                     .IsClustered();
 
                 entity.HasIndex(e => new { e.Moid, e.RtgStep, e.SaleDocId })
-                    .HasName("MA_SaleDocDetail4");
+                    .HasDatabaseName("MA_SaleDocDetail4");
 
                 entity.HasIndex(e => new { e.IncludedInTurnover, e.DocumentDate, e.CustSuppType, e.CustSupp, e.Item })
-                    .HasName("MA_SaleDocDetail2");
+                    .HasDatabaseName("MA_SaleDocDetail2");
 
                 entity.HasIndex(e => new { e.IncludedInTurnover, e.DocumentDate, e.Item, e.CustSuppType, e.CustSupp })
-                    .HasName("MA_SaleDocDetail3");
+                    .HasDatabaseName("MA_SaleDocDetail3");
 
                 entity.Property(e => e.ActualRetailPrice).HasDefaultValueSql("((0))");
 
@@ -6731,7 +6736,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_SaleDocReferences");
 
                 entity.HasIndex(e => new { e.DocumentType, e.DocumentId })
-                    .HasName("MA_SaleDocReferences2");
+                    .HasDatabaseName("MA_SaleDocReferences2");
 
                 entity.Property(e => e.DocumentDate)
                     .HasColumnType("datetime")
@@ -7318,25 +7323,25 @@ namespace EFMago.Models
                 entity.ToTable("MA_SaleOrd");
 
                 entity.HasIndex(e => e.Allocated)
-                    .HasName("MA_SaleOrd7");
+                    .HasDatabaseName("MA_SaleOrd7");
 
                 entity.HasIndex(e => e.Delivered)
-                    .HasName("MA_SaleOrd5");
+                    .HasDatabaseName("MA_SaleOrd5");
 
                 entity.HasIndex(e => e.InternalOrdNo)
-                    .HasName("MA_SaleOrd2");
+                    .HasDatabaseName("MA_SaleOrd2");
 
                 entity.HasIndex(e => e.Invoiced)
-                    .HasName("MA_SaleOrd6");
+                    .HasDatabaseName("MA_SaleOrd6");
 
                 entity.HasIndex(e => e.PreShipped)
-                    .HasName("MA_SaleOrd8");
+                    .HasDatabaseName("MA_SaleOrd8");
 
                 entity.HasIndex(e => new { e.Customer, e.OrderDate })
-                    .HasName("MA_SaleOrd3");
+                    .HasDatabaseName("MA_SaleOrd3");
 
                 entity.HasIndex(e => new { e.OrderDate, e.InternalOrdNo })
-                    .HasName("MA_SaleOrd4");
+                    .HasDatabaseName("MA_SaleOrd4");
 
                 entity.Property(e => e.SaleOrdId).ValueGeneratedNever();
 
@@ -7905,25 +7910,25 @@ namespace EFMago.Models
                 entity.ToTable("MA_SaleOrdDetails");
 
                 entity.HasIndex(e => e.Allocated)
-                    .HasName("MA_SaleOrdDetails6");
+                    .HasDatabaseName("MA_SaleOrdDetails6");
 
                 entity.HasIndex(e => new { e.Item, e.ExpectedDeliveryDate })
-                    .HasName("MA_SaleOrdDetails3");
+                    .HasDatabaseName("MA_SaleOrdDetails3");
 
                 entity.HasIndex(e => new { e.SaleOrdId, e.Position })
-                    .HasName("MA_SaleOrdDetails7");
+                    .HasDatabaseName("MA_SaleOrdDetails7");
 
                 entity.HasIndex(e => new { e.Delivered, e.ExpectedDeliveryDate, e.Item })
-                    .HasName("MA_SaleOrdDetails2");
+                    .HasDatabaseName("MA_SaleOrdDetails2");
 
                 entity.HasIndex(e => new { e.ProductionPlanId, e.ProductionPlanLine, e.Item })
-                    .HasName("MA_SaleOrdDetails8");
+                    .HasDatabaseName("MA_SaleOrdDetails8");
 
                 entity.HasIndex(e => new { e.ExpectedDeliveryDate, e.Item, e.LineType, e.Delivered, e.Cancelled })
-                    .HasName("MA_SaleOrdDetails5");
+                    .HasDatabaseName("MA_SaleOrdDetails5");
 
                 entity.HasIndex(e => new { e.Item, e.ExpectedDeliveryDate, e.LineType, e.Delivered, e.Cancelled })
-                    .HasName("MA_SaleOrdDetails4");
+                    .HasDatabaseName("MA_SaleOrdDetails4");
 
                 entity.Property(e => e.AdditionalQty).HasDefaultValueSql("((0.00))");
 
@@ -8104,6 +8109,8 @@ namespace EFMago.Models
                     .HasColumnType("datetime")
                     .HasDefaultValueSql("('17991231')");
 
+                entity.Property(e => e.ExternalLineReference).HasDefaultValueSql("((0))");
+
                 entity.Property(e => e.GrossVolume).HasDefaultValueSql("((0.00))");
 
                 entity.Property(e => e.GrossWeight).HasDefaultValueSql("((0.00))");
@@ -8164,6 +8171,8 @@ namespace EFMago.Models
                     .IsUnicode(false)
                     .IsFixedLength()
                     .HasDefaultValueSql("('0')");
+
+                entity.Property(e => e.NoOfPacks).HasDefaultValueSql("((0))");
 
                 entity.Property(e => e.NoPrint)
                     .HasMaxLength(1)
@@ -8230,6 +8239,8 @@ namespace EFMago.Models
                 entity.Property(e => e.ProductionJobSubId).HasDefaultValueSql("((0))");
 
                 entity.Property(e => e.ProductionPlanId).HasDefaultValueSql("((0))");
+
+                entity.Property(e => e.ProductionPlanLine).HasDefaultValueSql("((0))");
 
                 entity.Property(e => e.ProductionPlanNo)
                     .HasMaxLength(10)
@@ -8988,16 +8999,16 @@ namespace EFMago.Models
                 entity.ToTable("MA_Items");
 
                 entity.HasIndex(e => new { e.Disabled, e.Item })
-                    .HasName("IX_MA_Items_3");
+                    .HasDatabaseName("IX_MA_Items_3");
 
                 entity.HasIndex(e => new { e.IsGood, e.Item })
-                    .HasName("IX_MA_Items_2");
+                    .HasDatabaseName("IX_MA_Items_2");
 
                 entity.HasIndex(e => new { e.Item, e.IsGood })
-                    .HasName("IX_MA_Items_1");
+                    .HasDatabaseName("IX_MA_Items_1");
 
                 entity.HasIndex(e => new { e.SaleBarCode, e.Item })
-                    .HasName("IX_MA_Items_4");
+                    .HasDatabaseName("IX_MA_Items_4");
 
                 entity.Property(e => e.Item)
                     .HasMaxLength(21)
@@ -10102,7 +10113,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsFIFO");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.Item })
-                    .HasName("IX_MA_ItemsFIFO_1");
+                    .HasDatabaseName("IX_MA_ItemsFIFO_1");
 
                 entity.Property(e => e.Item)
                     .HasMaxLength(21)
@@ -10160,7 +10171,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsFIFODomCurr");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.Item })
-                    .HasName("IX_MA_ItemsFIFODomCurr_1");
+                    .HasDatabaseName("IX_MA_ItemsFIFODomCurr_1");
 
                 entity.Property(e => e.Item)
                     .HasMaxLength(21)
@@ -10201,7 +10212,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsFiscalData");
 
                 entity.HasIndex(e => e.ValueType)
-                    .HasName("IX_MA_ItemsFiscalData");
+                    .HasDatabaseName("IX_MA_ItemsFiscalData");
 
                 entity.Property(e => e.FiscalPeriod).HasDefaultValueSql("((1))");
 
@@ -10578,7 +10589,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsLIFO");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.Item })
-                    .HasName("IX_MA_ItemsLIFO_1");
+                    .HasDatabaseName("IX_MA_ItemsLIFO_1");
 
                 entity.Property(e => e.Item)
                     .HasMaxLength(21)
@@ -10628,7 +10639,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsLIFODomCurr");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.Item })
-                    .HasName("IX_MA_ItemsLIFODomCurr_1");
+                    .HasDatabaseName("IX_MA_ItemsLIFODomCurr_1");
 
                 entity.Property(e => e.Item)
                     .HasMaxLength(21)
@@ -10665,7 +10676,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsMonthlyBalances");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.Item })
-                    .HasName("IX_MA_ItemsMonthlyBalances_1");
+                    .HasDatabaseName("IX_MA_ItemsMonthlyBalances_1");
 
                 entity.Property(e => e.Storage)
                     .HasMaxLength(8)
@@ -10805,7 +10816,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsPriceLists");
 
                 entity.HasIndex(e => new { e.PriceList, e.Item, e.ValidityStartingDate, e.Qty })
-                    .HasName("IX_MA_ItemsPriceLists_1");
+                    .HasDatabaseName("IX_MA_ItemsPriceLists_1");
 
                 entity.Property(e => e.Item)
                     .HasMaxLength(21)
@@ -10899,7 +10910,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsPurchaseBarCode");
 
                 entity.HasIndex(e => e.BarCode)
-                    .HasName("IX_MA_ItemsPurchaseBarCode_");
+                    .HasDatabaseName("IX_MA_ItemsPurchaseBarCode_");
 
                 entity.Property(e => e.Item)
                     .HasMaxLength(21)
@@ -10950,10 +10961,10 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsStorageQty");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.FiscalPeriod, e.Storage, e.Item })
-                    .HasName("IX_MA_ItemsStorageQty_1");
+                    .HasDatabaseName("IX_MA_ItemsStorageQty_1");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.FiscalPeriod, e.Storage, e.SpecificatorType, e.Specificator, e.Item })
-                    .HasName("IX_MA_ItemsStorageQty_2");
+                    .HasDatabaseName("IX_MA_ItemsStorageQty_2");
 
                 entity.Property(e => e.Item)
                     .HasMaxLength(21)
@@ -11033,10 +11044,10 @@ namespace EFMago.Models
                 entity.ToTable("MA_ItemsStorageQtyMonthly");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.Storage, e.Item })
-                    .HasName("IX_MA_ItemsStorageMonthly_1");
+                    .HasDatabaseName("IX_MA_ItemsStorageMonthly_1");
 
                 entity.HasIndex(e => new { e.FiscalYear, e.Storage, e.SpecificatorType, e.Specificator, e.Item })
-                    .HasName("IX_MA_ItemsStorageMonthly_2");
+                    .HasDatabaseName("IX_MA_ItemsStorageMonthly_2");
 
                 entity.Property(e => e.Storage)
                     .HasMaxLength(8)
@@ -13707,10 +13718,10 @@ namespace EFMago.Models
                 entity.ToTable("MA_ChartOfAccounts");
 
                 entity.HasIndex(e => e.Description)
-                    .HasName("MA_ChartOfAccounts2");
+                    .HasDatabaseName("MA_ChartOfAccounts2");
 
                 entity.HasIndex(e => e.Ledger)
-                    .HasName("MA_ChartOfAccounts3");
+                    .HasDatabaseName("MA_ChartOfAccounts3");
 
                 entity.Property(e => e.Account)
                     .HasMaxLength(16)
@@ -14375,7 +14386,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_PaymentTerms");
 
                 entity.HasIndex(e => e.Description)
-                    .HasName("MA_PaymentTerms2");
+                    .HasDatabaseName("MA_PaymentTerms2");
 
                 entity.Property(e => e.Payment)
                     .HasMaxLength(8)
@@ -14744,7 +14755,7 @@ namespace EFMago.Models
                 entity.ToTable("MA_CrossReferences");
 
                 entity.HasIndex(e => new { e.OriginDocType, e.OriginDocId, e.Manual, e.DerivedDocType, e.DerivedDocId })
-                    .HasName("IX_MA_CrossReferences");
+                    .HasDatabaseName("IX_MA_CrossReferences");
 
                 entity.Property(e => e.OriginDocId).HasColumnName("OriginDocID");
 

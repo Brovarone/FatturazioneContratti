@@ -1,18 +1,24 @@
-﻿using System;
-using System.Drawing;
-using System.IO;
-using System.Windows.Forms;
-using System.Text.Json;
-using FatturazioneContratti.Config;
+﻿using FatturazioneContratti.Config;
 using FatturazioneContratti.Data;
 using FatturazioneContratti.Invoicing;
 using FatturazioneContratti.Orders;
+using System;
+using System.Data;
+using System.Drawing;
+using System.IO;
+using System.Text.Json;
+using System.Windows.Forms;
 
 namespace FatturazioneContratti.Forms
 {
     public partial class FLogin : Form
     {
         private const string AdminPassword = "123456";
+        // campi nella classe FLogin
+        private UiProgress _progressMain;
+        private UiProgress _progressSub;
+        //private UiProgress? _progressSubChild;
+
         private void esciToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Close();
@@ -75,6 +81,12 @@ namespace FatturazioneContratti.Forms
             if (AppConfig.IsDbUno) rdoUno.Checked = true; else rdoSpa.Checked = true;
 
             UpdateAziendaStatus();
+            InizializzaControlliBloccabili();
+
+            // inizializza (ad esempio in FLogin_Load o lazy al primo uso)
+            _progressMain = new UiProgress(progressBar);
+            _progressSub = new UiProgress(subProgressBar);
+            //_progressSubChild = new UiProgress(subProgressBar3);
         }
 
         private void btnTestConnection_Click(object sender, EventArgs e)
@@ -129,6 +141,7 @@ namespace FatturazioneContratti.Forms
         private void btnGeneraOrdini_Click(object sender, EventArgs e)
         {
             SyncConfigFromUI();
+            AggiornaStato("Elaborazione in corso...");
 
             using var formFiltri = new FAskFiltriOrdini { IsIstat = false };
             if (formFiltri.ShowDialog() != DialogResult.OK) return;
@@ -144,8 +157,12 @@ namespace FatturazioneContratti.Forms
                     filtri,
                     logMessage: Log,
                     updateStatus: AggiornaStato,
-                    advanceProgress: AvanzaProgress);
-            });
+                    progress1: new ProgressCallbacks(
+                        (min, max) => _progressMain?.Init(min, max), 
+                        () => _progressMain?.Advance(), 
+                        () => _progressMain?.Finish()),
+                    progress2: new ProgressCallbacks((min, max) => _progressSub?.Init(min, max), () => _progressSub?.Advance(), () => _progressSub?.Finish()));
+        });
         }
 
         // --- PROCESSO 2: ADEGUAMENTO ISTAT ORDINI ---
@@ -171,8 +188,9 @@ namespace FatturazioneContratti.Forms
                 return service.AdeguaIstatOrdine(
                     filtri,
                     logMessage: Log,
-                    updateStatus: AggiornaStato,
-                    advanceProgress: AvanzaProgress);
+                    updateStatus: AggiornaStato
+                    //,advanceProgress: AvanzaProgress
+                    );
             });
         }
 
@@ -192,7 +210,9 @@ namespace FatturazioneContratti.Forms
                 var service = new ConsuntivoService(ctx, AppConfig.LoginId);
 
                 Log("--- Step 1: Controllo Corrispondenze Flusso Integra ---");
-                bool checkOk = service.ControllaFlussoIntegra(filtri, Log, AggiornaStato, AvanzaProgress);
+                bool checkOk = service.ControllaFlussoIntegra(filtri, Log, AggiornaStato
+                    //, AvanzaProgress
+                    );
 
                 if (!checkOk)
                 {
@@ -201,7 +221,9 @@ namespace FatturazioneContratti.Forms
                 }
 
                 Log("--- Step 2: Generazione Fatture a Consuntivo ---");
-                return service.GeneraFattureConsuntivo(filtri, Log, AggiornaStato, AvanzaProgress);
+                return service.GeneraFattureConsuntivo(filtri, Log, AggiornaStato
+                    //, AvanzaProgress
+                    );
             });
         }
 
@@ -241,50 +263,115 @@ namespace FatturazioneContratti.Forms
         // --- METODI DI SUPPORTO UI ---
         private void EseguiOperazione(string nomeProcesso, Func<bool> azione)
         {
-            Cursor = Cursors.WaitCursor;
-            progressBar.Value = 0;
+            if (_inElaborazione) return;   // protezione extra contro doppi avvii
+
+            // UI iniziale
+            SetUiBusy(true);
             Log($"=== AVVIO: {nomeProcesso} ({DateTime.Now:dd/MM/yyyy HH:mm:ss}) ===");
 
-            try
+            // Esegui il lavoro su background per non bloccare la UI
+            System.Threading.Tasks.Task.Run(() =>
             {
-                bool esito = azione();
-                Log(esito ? $"=== COMPLETATO CON SUCCESSO: {nomeProcesso} ===" : $"=== COMPLETATO CON ERRORI: {nomeProcesso} ===");
-            }
-            catch (Exception ex)
-            {
-                Log($"ERRORE CRITICO in {nomeProcesso}: {ex.Message}");
-                MessageBox.Show(ex.Message, "Errore di esecuzione", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                progressBar.Value = 0;
-                Cursor = Cursors.Default;
-            }
+                bool esito = false;
+                try
+                {
+                    esito = azione();
+
+                    // Posta il risultato sul thread UI
+                    Invoke(new Action(() =>
+                    {
+                        Log(esito ? $"=== COMPLETATO CON SUCCESSO: {nomeProcesso} ==="
+                                  : $"=== COMPLETATO CON ERRORI: {nomeProcesso} ===");
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    // Marshal dell'errore su UI
+                    Invoke(new Action(() =>
+                    {
+                        Log($"ERRORE CRITICO in {nomeProcesso}: {ex.Message}");
+                        MessageBox.Show(ex.Message, "Errore di esecuzione", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }));
+                }
+                finally
+                {
+                    // Ripristina UI sul thread UI
+                    SetUiBusy(false);   // gestisce già il marshaling
+                }
+            });
         }
 
         private void Log(string message)
         {
             if (string.IsNullOrWhiteSpace(message)) return;
+
+            if (InvokeRequired)
+            {
+                // Marshal verso UI
+                BeginInvoke(new Action(() => Log(message)));
+                return;
+            }
+
             lstStato.Items.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
-            lstStato.TopIndex = lstStato.Items.Count - 1;
-            Application.DoEvents();
+            lstStato.TopIndex = lstStato.Items.Count - 1;            
         }
 
         private void AggiornaStato(string status)
         {
-            lblStatus.Text = status;
-            Application.DoEvents();
-        }
+            if (InvokeRequired)
+            {
+                // Marshal verso UI
+                BeginInvoke(new Action(() => AggiornaStato(status)));
+                return;
+            }
 
-        private void AvanzaProgress()
-        {
-            if (progressBar.Value < progressBar.Maximum)
-                progressBar.Value += 1;
-            else
-                progressBar.Value = 0;
-            Application.DoEvents();
-        }
+            lblStatus.Text = status;            
+        }        
 
         private void btnPulisciLog_Click(object sender, EventArgs e) => lstStato.Items.Clear();
+
+        //  --- Controlli da bloccare durante un'elaborazione. Adatta i nomi a quelli reali della tua form.  --- 
+        private Control[] _controlliDaBloccare;
+        private bool _inElaborazione;
+
+        private void InizializzaControlliBloccabili()
+        {
+            _controlliDaBloccare = new Control[]
+            {
+                btnGeneraOrdini,
+                btnAdeguamentoIstat,
+                btnConsuntivi,
+                btnAllineaFattureOrdini,
+                btnTestConnection,
+                txtServer, txtUser, txtPassword, txtLoginId,
+                chkTestDb, chkDebug,
+                rdoUno, rdoSpa
+                // NON metto btnPulisciLog né lstStato: devono restare usabili
+            };
+        }
+
+        private void SetUiBusy(bool busy)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => SetUiBusy(busy)));
+                return;
+            }
+
+            _inElaborazione = busy;
+
+            foreach (var c in _controlliDaBloccare)
+                c.Enabled = !busy;
+
+            menuStripPrincipal.Enabled = !busy;
+
+            Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
+
+            if (!busy)
+            {
+                progressBar.Visible = false;
+                subProgressBar.Visible = false;
+            }
+        }
     }
 }

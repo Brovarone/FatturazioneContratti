@@ -20,7 +20,7 @@ namespace EFMago.Models
         public int TbmodifiedId { get; set; }
                 
         // Creato da me
-        public virtual AllordCliAttivita AllordCliAttivita { get; set; }
+        public virtual ICollection<AllordCliAttivita> AllordCliAttivita { get; set; }
 
     }
 }

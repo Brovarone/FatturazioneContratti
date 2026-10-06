@@ -54,6 +54,7 @@
             progressBar = new ProgressBar();
             lblStatus = new Label();
             btnPulisciLog = new Button();
+            subProgressBar = new ProgressBar();
             menuStripPrincipal.SuspendLayout();
             grpConn.SuspendLayout();
             grpAzienda.SuspendLayout();
@@ -81,7 +82,7 @@
             // 
             esciToolStripMenuItem.Name = "esciToolStripMenuItem";
             esciToolStripMenuItem.ShortcutKeys = Keys.Alt | Keys.F4;
-            esciToolStripMenuItem.Size = new Size(180, 22);
+            esciToolStripMenuItem.Size = new Size(136, 22);
             esciToolStripMenuItem.Text = "&Esci";
             esciToolStripMenuItem.Click += esciToolStripMenuItem_Click;
             // 
@@ -273,9 +274,9 @@
             chkDebug.Location = new Point(525, 23);
             chkDebug.Margin = new Padding(4, 3, 4, 3);
             chkDebug.Name = "chkDebug";
-            chkDebug.Size = new Size(105, 19);
+            chkDebug.Size = new Size(82, 19);
             chkDebug.TabIndex = 4;
-            chkDebug.Text = "Log Debug ON";
+            chkDebug.Text = "Debug ON";
             chkDebug.UseVisualStyleBackColor = true;
             // 
             // lblDbInUso
@@ -403,6 +404,7 @@
             progressBar.Margin = new Padding(4, 3, 4, 3);
             progressBar.Name = "progressBar";
             progressBar.Size = new Size(653, 21);
+            progressBar.Step = 1;
             progressBar.TabIndex = 7;
             // 
             // lblStatus
@@ -426,11 +428,22 @@
             btnPulisciLog.UseVisualStyleBackColor = true;
             btnPulisciLog.Click += btnPulisciLog_Click;
             // 
+            // subProgressBar
+            // 
+            subProgressBar.Location = new Point(346, 519);
+            subProgressBar.Margin = new Padding(4, 3, 4, 3);
+            subProgressBar.Name = "subProgressBar";
+            subProgressBar.Size = new Size(208, 21);
+            subProgressBar.Step = 1;
+            subProgressBar.TabIndex = 8;
+            subProgressBar.Visible = false;
+            // 
             // FLogin
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(681, 586);
+            Controls.Add(subProgressBar);
             Controls.Add(btnPulisciLog);
             Controls.Add(lblStatus);
             Controls.Add(progressBar);
@@ -498,5 +511,6 @@
         private System.Windows.Forms.ProgressBar progressBar;
         private System.Windows.Forms.Label lblStatus;
         private System.Windows.Forms.Button btnPulisciLog;
+        private ProgressBar subProgressBar;
     }
 }
