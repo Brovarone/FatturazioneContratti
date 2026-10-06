@@ -34,7 +34,7 @@ namespace FatturazioneContratti.Data
             var conn = new SqlConnection(GetCurrentConnectionString());
             conn.Open();
 
-            using (var cmd = new SqlCommand("SET ARITHABORT ON", conn))
+            using (var cmd = new SqlCommand("SET ARITHABORT ON;", conn))
             {
                 cmd.ExecuteNonQuery();
             }
@@ -49,6 +49,13 @@ namespace FatturazioneContratti.Data
         {
             var optionsBuilder = new DbContextOptionsBuilder<FattureContext>();
             optionsBuilder.UseSqlServer(GetCurrentConnectionString());
+
+            if (AppConfig.IsDebugging)
+            {
+                // ATTIVA LA DIAGNOSTICA AVANZATA SULLE COLONNE
+                optionsBuilder.EnableDetailedErrors(); // <-- DICE IL NOME DELLA COLONNA CHE CONTIENE IL NULL!
+                optionsBuilder.EnableSensitiveDataLogging(); // <-- DICE I VALORI DEI PARAMETRI
+            }             
 
             var ctx = new FattureContext(optionsBuilder.Options);
             ctx.Database.SetCommandTimeout(180);
