@@ -10,17 +10,14 @@ namespace FatturazioneContratti.Invoicing
         public static bool AdeguaFattureDaOrdini(
             SqlConnection connection,
             SqlTransaction transaction,
-            DateTime fromDate,
-            DateTime toDate,
-            string nrFirst,
-            string nrLast,
-            bool allNumbers,
+            FiltriAllineamentoFatture filtri,
             int loginId,
             out string resultMessage)
         {
             resultMessage = string.Empty;
-            string sFromDate = fromDate.ToString("yyyyMMdd");
-            string sToDate = toDate.ToString("yyyyMMdd");
+
+            string sFromDate = filtri.DataFattDa.ToString("yyyyMMdd");
+            string sToDate = filtri.DataFattA.ToString("yyyyMMdd");
 
             var sb = new StringBuilder();
             sb.Append("UPDATE MA_SaleDocDetail SET ");
@@ -43,15 +40,15 @@ namespace FatturazioneContratti.Invoicing
                 using var cmd = new SqlCommand(sb.ToString(), connection, transaction);
                 cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 8).Value = sFromDate;
                 cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 8).Value = sToDate;
-                cmd.Parameters.Add("@AllNumbers", SqlDbType.Bit).Value = allNumbers;
-                cmd.Parameters.Add("@NrFirst", SqlDbType.VarChar, 10).Value = nrFirst ?? string.Empty;
-                cmd.Parameters.Add("@NrLast", SqlDbType.VarChar, 10).Value = nrLast ?? string.Empty;
+                cmd.Parameters.Add("@AllNumbers", SqlDbType.Bit).Value = filtri.AllNumbers;
+                cmd.Parameters.Add("@NrFirst", SqlDbType.VarChar, 10).Value = filtri.NrFirst ?? string.Empty;
+                cmd.Parameters.Add("@NrLast", SqlDbType.VarChar, 10).Value = filtri.NrLast ?? string.Empty;
                 cmd.Parameters.Add("@DataMod", SqlDbType.VarChar, 8).Value = DateTime.Now.ToString("yyyyMMdd");
                 cmd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
 
                 int irows = cmd.ExecuteNonQuery();
-                resultMessage = irows <= 0 
-                    ? "Nessun documento di vendita da aggiornare" 
+                resultMessage = irows <= 0
+                    ? "Nessun documento di vendita da aggiornare"
                     : $"Adeguate {irows} righe.";
                 return true;
             }
