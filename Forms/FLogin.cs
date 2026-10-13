@@ -21,7 +21,8 @@ namespace FatturazioneContratti.Forms
 
         // nuovi campi per il logging su file
         private string _logFilePath = string.Empty;
-        private readonly object _logLock = new object();               
+        private readonly object _logLock = new object();
+        private bool _configUnlocked = false; 
 
         private void esciToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -30,12 +31,21 @@ namespace FatturazioneContratti.Forms
 
         private void configurazioneAvanzataToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            // Chiede la password con la maschera C# dedicata
-            if (!FPasswordPrompt.ChiediPassword(this, AdminPassword))
+            if (!_configUnlocked && !FPasswordPrompt.ChiediPassword(this, AdminPassword))
             {
                 MessageBox.Show("Password non valida.", "Accesso Negato", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
+            _configUnlocked = true;
+            this.BackColor = System.Drawing.Color.FromArgb(230, 245, 230);
+            menuStripPrincipal.BackColor = System.Drawing.Color.FromArgb(200, 235, 200);
+            lstStato.BackColor = System.Drawing.Color.FromArgb(240, 250, 240);
+            this.Text = "FatturazioneContratti (configurazione sbloccata)";
+            try { apriJsonToolStripMenuItem.Visible = true; } catch { }
+            try { apriCartellaSettingsToolStripMenuItem.Visible = true; } catch { }
+            AggiornaStato("Configurazione avanzata sbloccata.");
+            Log("Configurazione avanzata sbloccata.");
 
             using var fSettings = new FSettings();
             if (fSettings.ShowDialog(this) == DialogResult.OK)
@@ -68,6 +78,9 @@ namespace FatturazioneContratti.Forms
         public FLogin()
         {
             InitializeComponent();
+            // Usa l'icona dell'eseguibile come icona della form
+            try { this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+            catch { }
         }
 
         private void FLogin_Load(object sender, EventArgs e)
@@ -76,6 +89,9 @@ namespace FatturazioneContratti.Forms
             AppConfig.Load();
                         
             UpdateAziendaStatus();
+            // Le voci per aprire JSON/cartella impostazioni restano disponibili solo dal dialog FSettings
+            try { apriJsonToolStripMenuItem.Visible = false; } catch { }
+            try { apriCartellaSettingsToolStripMenuItem.Visible = false; } catch { }
             InizializzaControlliBloccabili();
 
             // inizializza (ad esempio in FLogin_Load o lazy al primo uso)
@@ -98,6 +114,10 @@ namespace FatturazioneContratti.Forms
                 }
 
                 _logFilePath = Path.Combine(logsDir, $"FatturazioneContratti_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+
+                // Assicura che il file esista fin dall'avvio, così il comando "Apri log" lo trova sempre
+                if (!File.Exists(_logFilePath))
+                    File.WriteAllText(_logFilePath, "");
 
                 // salva la cartella log in configurazione per eventuale accesso futuro
                 AppConfig.LastLogPath = logsDir;
@@ -248,9 +268,11 @@ namespace FatturazioneContratti.Forms
 
         // --- PROCESSO 4: ALLINEAMENTO DATE CANONI FATTURE DA ORDINI ---
         private void btnAllineaFattureOrdini_Click(object sender, EventArgs e)
-        {           
-            DateTime fineMese = new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month));
-            DateTime inizioAnno = new DateTime(DateTime.Today.Year, 1, 1);
+        {
+            using var formFiltri = new FAskFiltriAllineamentoFatture();
+            if (formFiltri.ShowDialog(this) != DialogResult.OK) return;
+
+            var filtri = formFiltri.OttieniFiltri();
 
             EseguiOperazione("Allineamento Canoni Fatture", () =>
             {
@@ -260,11 +282,7 @@ namespace FatturazioneContratti.Forms
                 bool ok = FattureDaOrdiniService.AdeguaFattureDaOrdini(
                     conn,
                     trans,
-                    inizioAnno,
-                    fineMese,
-                    nrFirst: string.Empty,
-                    nrLast: string.Empty,
-                    allNumbers: true,
+                    filtri,
                     loginId: AppConfig.LoginId,
                     out string msg);
 
@@ -295,8 +313,8 @@ namespace FatturazioneContratti.Forms
                 {
                     esito = azione();
 
-                    // Posta il risultato sulthread UI
-                    Invoke(new Action(() =>
+                    // Posta il risultato sul thread UI in modo sicuro
+                    PostToUi(() =>
                     {
                         Log(esito ? $"=== COMPLETATO CON SUCCESSO: {nomeProcesso} ==="
                                   : $"=== COMPLETATO CON ERRORI: {nomeProcesso} ===");
@@ -311,23 +329,23 @@ namespace FatturazioneContratti.Forms
 
                         // Link al file di log della sessione appena conclusa
                         lnkApriLog.Visible = true;
-                    }));
+                    });
                 }
                 catch (Exception ex)
                 {
-                    // Marshal dell'errore su UI
-                    Invoke(new Action(() =>
+                    // Marshal dell'errore su UI in modo sicuro
+                    PostToUi(() =>
                     {
                         Log($"ERRORE CRITICO in {nomeProcesso}: {ex.Message}");
                         AggiornaStato($"Errore critico in {nomeProcesso}: {ex.Message}", Color.DarkRed);
                         lnkApriLog.Visible = true;   // il log può contenere il dettaglio dell'errore
                         MessageBox.Show(ex.Message, "Errore di esecuzione", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }));
+                    });
                 }
                 finally
                 {
                     // Ripristina UI sul thread UI
-                    SetUiBusy(false);   // gestisce già il marshaling
+                    PostToUi(() => SetUiBusy(false));   // gestisce già il marshaling
                 }
             });
         }
@@ -338,8 +356,8 @@ namespace FatturazioneContratti.Forms
         /// </summary>
         public void Log(string message)
         {
-            // default: solo UI
-            Log(message, AppConfig.LogTarget.Ui);
+            // default: rispetta la modalità di log configurata (default = entrambi)
+            Log(message, AppConfig.LogMode);
         }
 
         /// <summary>
@@ -410,10 +428,16 @@ namespace FatturazioneContratti.Forms
 
         private void AggiornaStato(string status, Color? colore)
         {
+            if (IsDisposed || !IsHandleCreated) return;
             if (InvokeRequired)
             {
-                // Marshal verso UI
-                BeginInvoke(new Action(() => AggiornaStato(status, colore)));
+                // Marshal verso UI in modo sicuro
+                try
+                {
+                    if (!IsDisposed && IsHandleCreated)
+                        BeginInvoke(new Action(() => AggiornaStato(status, colore)));
+                }
+                catch { /* form smaltita */ }
                 return;
             }
 
@@ -482,7 +506,7 @@ namespace FatturazioneContratti.Forms
 
         //  --- Controlli da bloccare durante un'elaborazione. Adatta i nomi a quelli reali della tua form.  --- 
         private Control[] _controlliDaBloccare;
-        private bool _inElaborazione;
+        private volatile bool _inElaborazione;
 
         private void InizializzaControlliBloccabili()
         {
@@ -496,11 +520,37 @@ namespace FatturazioneContratti.Forms
             };
         }
 
+        private void PostToUi(Action action)
+        {
+            if (action == null) return;
+            try
+            {
+                if (IsDisposed || !IsHandleCreated) return;
+                if (InvokeRequired)
+                {
+                    BeginInvoke(action);
+                }
+                else
+                {
+                    action();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // Form già smaltita: ignora.
+            }
+            catch (InvalidOperationException)
+            {
+                // Handle non più valido: ignora.
+            }
+        }
+
         private void SetUiBusy(bool busy)
         {
+            if (IsDisposed || !IsHandleCreated) return;
             if (InvokeRequired)
             {
-                Invoke(new Action(() => SetUiBusy(busy)));
+                try { Invoke(new Action(() => SetUiBusy(busy))); } catch { /* form smaltita */ }
                 return;
             }
 

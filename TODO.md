@@ -3,24 +3,39 @@
 Riepilogo di cosa resta da fare sul progetto FatturazioneContratti dopo la sessione
 di revisione codice. Le fix già applicate sono elencate in fondo per riferimento.
 
+*Aggiornamento 13/10/2026: voci riverificate sul codice (working copy con modifiche
+non committate). Le voci eseguite sono spuntate `[x]` e riportate in §5.*
+
 ---
 
 ## 1. APPUNTO LOG (root della questione, da decidere prima di tutto)
 
-**Problema**: il sistema di log va rivisto. Oggi i servizi chiamano il log con
-`LogTarget.Ui` (OrderGenerationService, ConsuntivoService ecc.), quindi
-`FLogin.Log` scrive solo sulla listbox `lstStato` e **il file .log resta vuoto**
-(il file viene creato in `FLogin_Load` ma nessuno ci scrive, salvo le poche
-chiamate con target `File` in `ControllaFlussoIntegra`). Esiste la proprietà
-`AppConfig.LogMode` (default `Ui`) che però **non viene mai consultata**.
+**Stato al 13/10/2026** (verificato sul codice; modifiche non committate): il quadro
+è parzialmente cambiato rispetto alla sessione del 12/10.
+- `AppConfig.LogMode` ora ha default `Both` (era `Ui`), è persistito in `Load`/`Save`
+  (`Config/AppConfig.cs:40,102-103,137,171`) ed è selezionabile in `FSettings`
+  (combo UI/File/Entrambi — NOTA: refuso "Entambi" in `Forms/FSettings.cs:44`).
+  `FLogin.Log(string)` ora instrada su `LogMode` (`Forms/FLogin.cs:357-361`).
+- MA i servizi chiamano ancora il log con target esplicito `LogTarget.Ui`
+  (`Orders/OrderGenerationService.cs`, `Orders/OrderGenerationService.Istat.cs`,
+  `Invoicing/ConsuntivoService.cs`, `Common/BulkPersistenceHelper.cs`), quindi le
+  righe operative dei servizi restano solo su UI. Sul file arrivano solo i messaggi
+  di `FLogin` (avvio/completato/errori): il file non è più *sempre* vuoto, ma non
+  contiene il dettaglio operativo.
+- `debugging`/`avvisi` ancora mai scaricati (nessun `.ToString()` in giro); errori
+  dei servizi con solo `ex.Message`, senza stack. I crash globali vanno invece nel
+  crash log via nuovo `Common/CrashLogger.cs` (file untracked) + handler in
+  `Program.cs` (vedi punto 8).
 
-**Decisioni da prendere** (UI / file / entrambi):
+**Decisioni residue** (UI / file / entrambi):
 
-- [ ] Quale target predefinito per i messaggi dei 3 servizi (OrderGenerationService, ConsuntivoService, AdeguaIstatOrdine)?
-- [ ] Onorare `AppConfig.LogMode` in `FLogin.Log`? (proposta: se `destination == Ui` e `LogMode` è `File`/`Both` → promuovi a `Both`; default `Ui` invariato)
-- [ ] Cosa scrivere su file tra: messaggi operativi (Passo 1/2, contatori), `debugging` e `avvisi` (vedi punto 19 — StringBuilder popolati e mai scaricati), errori con stack
-- [ ] Formato/rotazione: un file per sessione (`FatturazioneContratti_yyyyMMdd_HHmmss.log`) va bene, oppure giornaliero unico?
-- [ ] La nuova LinkLabel "Apri file di log" (già aggiunta a FLogin) aprirebbe un file vuoto finché non si decide quanto sopra — ricontrollarla dopo la scelta
+- [ ] Target servizi: passare `Both` (o `LogMode`) nelle `Invoke` dei servizi, oppure
+  promuovere `Ui`→`Both` in `FLogin.Log` quando `LogMode` è `File`/`Both`?
+- [ ] Scaricare `debugging`/`avvisi` su file a fine workflow (vedi punto 19)?
+- [x] Formato/rotazione: file per sessione (`FatturazioneContratti_yyyyMMdd_HHmmss.log`)
+  creato in `FLogin_Load` (anche vuoto) + `LastLogPath` salvato — `Forms/FLogin.cs:102-124`.
+- [x] LinkLabel "Apri file di log": apre file → fallback Notepad → fallback cartella;
+  mostrata a fine operazione — `Forms/FLogin.cs:444-499`.
 
 Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diagnostico
 ([ESCLUSA] varie, dettaglio righe, messaggi storici tipo "  - Cessato").
@@ -52,14 +67,19 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   - `OrderGenerationService.Istat.cs`: "riga di adeguamento Istat già presente per l'anno...", "scadenza fissa. Controllare canoni!"
 - Da concordare con le decisioni del punto 1 (questa sessione).
 
-### Punto 8 — robustezza UI (suggerimento dato, non applicato)
-- `Forms/FLogin.cs` `EseguiOperazione`: `Invoke` sincroni nel task in background
-  esplodono se la form viene chiusa durante l'elaborazione (thread pool).
-- `Program.cs`: nessun gestore globale eccezioni (`Application.ThreadException`,
-  `AppDomain.UnhandledException`, `TaskScheduler.UnobservedTaskException`) e
-  nessun log su crash.
-- Proposta formulata: helper `PostToUi` con `IsHandleCreated/IsDisposed` +
-  `BeginInvoke` in try/catch, `_inElaborazione` volatile, handler in `Program.Main`.
+### Punto 8 — robustezza UI (COMPLETATO)
+- `Forms/FLogin.cs`: helper `PostToUi` con `IsHandleCreated`/`IsDisposed` +
+  `BeginInvoke` in try/catch, `_inElaborazione` volatile, `EseguiOperazione` usa
+  `PostToUi`; `AggiornaStato` reso sicuro (guardie handle + try/catch sul
+  `BeginInvoke`); `SetUiBusy` reso sicuro (`IsDisposed`/`IsHandleCreated`,
+  `Invoke` in try/catch). Stato del testo UI non esplode più a form chiusa.
+- `Program.cs`: gestori globali (`Application.ThreadException`,
+  `AppDomain.UnhandledException`, `TaskScheduler.UnobservedTaskException`) con
+  `SetObserved()` e wrap di `Application.Run` in try/catch.
+- `Common/CrashLogger.cs`: scrive `crash_yyyyMMdd_HHmmss_fff.log` (stack trace,
+  contesto thread/DB/eseguibile, fallback AppData).
+- Build: 0 errori / 0 avvisi. File ancora da committare aggiungere a git:
+  `Common/CrashLogger.cs`.
 
 ---
 
@@ -71,11 +91,11 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   solo record opzioni.
 
 ### Punto 23 — duplicazioni
-- `CreaRigaDescrittiva` / `CreaRigaRiferimento` (`OrderGenerationService.cs`): ~35 righe
-  quasi identiche → base comune.
-- `SubstringSafe` (`OrderGenerationService.cs`) duplicato inline in `ConsuntivoService.cs`
-  (nota `c.Nota` troncata a 32) → helper comune.
-- Creazione dei `ProgressCallbacks` ripetuta 3 volte in `Forms/FLogin.cs` → factory.
+- [x] `CreaRigaDescrittiva` / `CreaRigaRiferimento` (`OrderGenerationService.cs`) unificate
+  in `CreaRigaNota(..., LineType, ...)` — modifica non committata, da riverificare in build/test.
+- [ ] `SubstringSafe` (`OrderGenerationService.cs`) duplicato inline in `ConsuntivoService.cs`
+  (`Invoicing/ConsuntivoService.cs:545`, ternario su `c.Nota` troncata a 32) → helper comune.
+- [ ] Creazione dei `ProgressCallbacks` ripetuta 4 volte in `Forms/FLogin.cs` → factory.
 
 ### Punto 24 — warning annullabili rilevanti (dal build)
 - `Invoicing/ConsuntivoService.cs`: `Break(..., customer, ...)` può ricevere null
@@ -104,7 +124,9 @@ Nessun test automatico. Da provare via UI con DB di test:
 3. **Consuntivazione** (**la più a rischio**): raggruppamento fatture ristrutturato,
    ID documento assegnato solo ai gruppi con righe (nessuna testa vuota, nessun
    buco nel numeratore), cross-ref e ritenuta solo con righe, `LastSubId` via GroupBy,
-4. **Allineamento Fatture** — non toccato.
+4. **Allineamento Fatture** — ATTENZIONE: non più "non toccato": `FattureDaOrdiniService`
+   ora prende `FiltriAllineamentoFatture` + nuova dialog `FAskFiltriAllineamentoFatture`
+   (modifiche non committate) → da riverificare via UI come gli altri.
 
 ---
 
@@ -130,5 +152,13 @@ Nessun test automatico. Da provare via UI con DB di test:
 | 14 | Cache statica property per tipo in `CloneFromPrototype` | `Common/EntityCloner.cs` |
 | 16 | `UiProgress.Advance` sicuro con Minimum == Maximum | `Forms/UiProgress.cs` |
 | — | Esito finale su `lblStatus` (verde/rosso) + LinkLabel "Apri file di log" | `Forms/FLogin.cs` |
+| L1 | `LogMode` default `Both` + persistenza `Load`/`Save`/`ConfigData` + combo in `FSettings` | `Config/AppConfig.cs`, `Forms/FSettings.cs` (+Designer) |
+| L2 | `FLogin.Log(string)` instrada su `LogMode`; file di log creato (anche vuoto) in `FLogin_Load` | `Forms/FLogin.cs` |
+| 8 | `PostToUi` + `_inElaborazione` volatile; handler globali eccezioni + `CrashLogger` (untracked) | `Forms/FLogin.cs`, `Program.cs`, `Common/CrashLogger.cs` |
+| 23a | `CreaRigaDescrittiva`/`CreaRigaRiferimento` unificate in `CreaRigaNota` | `Orders/OrderGenerationService.cs` |
+| A4 | Allineamento: nuova dialog `FAskFiltriAllineamentoFatture` (date da/a + radio "Tutti i numeri" / "Intervallo primo-ultimo"); firma `AdeguaFattureDaOrdini` ora riceve `FiltriAllineamentoFatture` (`AllNumbers`, `NrFirst`, `NrLast`) | `Invoicing/FattureDaOrdiniService.cs`, `Invoicing/FiltriAllineamentoFatture.cs`, `Forms/FAskFiltriAllineamentoFatture*.cs`, `Forms/FLogin.cs` |
+
+> Le righe L1, L2, 8, 23a, A4 risultano **eseguite ma non committate** (working copy
+> del 13/10/2026) — da committare dopo build + verifica manuale §4.
 
 Build: 0 errori (warning ~1820, per lo più attesi sui model generati).

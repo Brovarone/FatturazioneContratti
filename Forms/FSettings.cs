@@ -10,6 +10,8 @@ namespace FatturazioneContratti.Forms
         public FSettings()
         {
             InitializeComponent();
+            try { this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+            catch { }
         }
 
         private void FSettings_Load(object sender, EventArgs e)
@@ -36,6 +38,17 @@ namespace FatturazioneContratti.Forms
             txtPathGenerale.Text = AppConfig.Path;
             txtPathFox.Text = AppConfig.FoxPath;
             txtPathPaghe.Text = AppConfig.PathPaghe;
+            txtLastLogPath.Text = AppConfig.LastLogPath;
+
+            if (cboLogMode.Items.Count == 0)
+                cboLogMode.Items.AddRange(new object[] { "UI", "File", "Entrambi" });
+
+            cboLogMode.SelectedIndex = AppConfig.LogMode switch
+            {
+                AppConfig.LogTarget.Ui => 0,
+                AppConfig.LogTarget.File => 1,
+                _ => 2
+            };
         }
 
         private void btnSfoglia_Click(object sender, EventArgs e)
@@ -47,6 +60,8 @@ namespace FatturazioneContratti.Forms
                 txtPathFox.Text = fbd.SelectedPath;
             else if (sender == btnSfogliaPaghe && fbd.ShowDialog() == DialogResult.OK)
                 txtPathPaghe.Text = fbd.SelectedPath;
+            else if (sender == btnSfogliaLastLog && fbd.ShowDialog() == DialogResult.OK)
+                txtLastLogPath.Text = fbd.SelectedPath;
         }
 
         private void btnApriJson_Click(object sender, EventArgs e)
@@ -106,6 +121,14 @@ namespace FatturazioneContratti.Forms
             AppConfig.Path = txtPathGenerale.Text.Trim();
             AppConfig.FoxPath = txtPathFox.Text.Trim();
             AppConfig.PathPaghe = txtPathPaghe.Text.Trim();
+            AppConfig.LastLogPath = txtLastLogPath.Text.Trim();
+
+            AppConfig.LogMode = cboLogMode.SelectedIndex switch
+            {
+                0 => AppConfig.LogTarget.Ui,
+                1 => AppConfig.LogTarget.File,
+                _ => AppConfig.LogTarget.Both
+            };
 
             AppConfig.Save();
             DialogResult = DialogResult.OK;

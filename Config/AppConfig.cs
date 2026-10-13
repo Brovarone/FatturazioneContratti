@@ -37,7 +37,7 @@ namespace FatturazioneContratti.Config
             File = 1,
             Both = 2
         }
-        public static LogTarget LogMode { get; set; } = LogTarget.Ui;
+        public static LogTarget LogMode { get; set; } = LogTarget.Both;
 
         // Proprietà dinamica che restituisce il DB corretto in base ai radio/check
         public static string DatabaseInUse
@@ -98,6 +98,9 @@ namespace FatturazioneContratti.Config
                     FoxPath = data.FoxPath ?? FoxPath;
                     LastLogPath = data.LastLogPath ?? LastLogPath;
                     PathPaghe = data.PathPaghe ?? PathPaghe;
+
+                    if (data.LogMode.HasValue)
+                        LogMode = (LogTarget)data.LogMode.Value;
                 }
             }
             catch (Exception ex)
@@ -130,7 +133,8 @@ namespace FatturazioneContratti.Config
                     Path = Path,
                     FoxPath = FoxPath,
                     LastLogPath = LastLogPath,
-                    PathPaghe = PathPaghe
+                    PathPaghe = PathPaghe,
+                    LogMode = (int)LogMode
                 };
 
                 if (!Directory.Exists(FolderPath))
@@ -164,6 +168,7 @@ namespace FatturazioneContratti.Config
             public string FoxPath { get; set; }
             public string LastLogPath { get; set; }
             public string PathPaghe { get; set; }
+            public int? LogMode { get; set; }
         }
         // UTILITY
         public static void ApriFileJson()

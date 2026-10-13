@@ -222,7 +222,7 @@ namespace FatturazioneContratti.Orders
                                             iNewRowsCount++;
                                             iNrRigheNota++;
                                             newRow = protoMaSaleOrdDetails.CloneFromPrototype();
-                                            insertMaSaleOrdDetails.Add(CreaRigaDescrittiva(newRow, iNewRowsCount, cOrdRow, d.Descrizione));
+                                            insertMaSaleOrdDetails.Add(CreaRigaNota(newRow, cOrd, cOrdRow, d.Descrizione, iNewRowsCount, LineType.Nota));
                                         }
                                     }
 
@@ -243,7 +243,7 @@ namespace FatturazioneContratti.Orders
                                         iNrRigheNota++;
                                         newRow = protoMaSaleOrdDetails.CloneFromPrototype();
                                         string descriRif = (string.IsNullOrWhiteSpace(cOrdRow.ContrattoFox) ? string.Empty : $"Codice : {cOrdRow.ContrattoFox}") + $" Rif : {cOrdRow.Parent.OrdNo}";
-                                        insertMaSaleOrdDetails.Add(CreaRigaRiferimento(newRow, cOrd, cOrdRow, descriRif.TrimStart(), iNewRowsCount, (short)(curLastPosition + iNrRigheAValore)));
+                                        insertMaSaleOrdDetails.Add(CreaRigaNota(newRow, cOrd, cOrdRow, descriRif.TrimStart(), iNewRowsCount, LineType.Riferimento, (short)(curLastPosition + iNrRigheAValore)));
 
                                         // Righe Descrittive Contratto
                                         if (c.AllordCliContrattoDescFatt != null)
@@ -253,7 +253,7 @@ namespace FatturazioneContratti.Orders
                                                 iNewRowsCount++;
                                                 iNrRigheNota++;
                                                 newRow = protoMaSaleOrdDetails.CloneFromPrototype();
-                                                insertMaSaleOrdDetails.Add(CreaRigaDescrittiva(newRow, iNewRowsCount, cOrdRow, d.Descrizione));
+                                                insertMaSaleOrdDetails.Add(CreaRigaNota(newRow, cOrd, cOrdRow, d.Descrizione, iNewRowsCount, LineType.Nota));
                                             }
                                         }
 
@@ -270,7 +270,7 @@ namespace FatturazioneContratti.Orders
                                         iNewRowsCount++;
                                         iNrRigheNota++;
                                         newRow = protoMaSaleOrdDetails.CloneFromPrototype();
-                                        var rd = CreaRigaDescrittiva(newRow, iNewRowsCount, cOrdRow, aIst.TestoFattura);
+                                        var rd = CreaRigaNota(newRow, cOrd, cOrdRow, aIst.TestoFattura, iNewRowsCount, LineType.Nota);
                                         insertMaSaleOrdDetails.Add(rd);
                                         updateAllordCliAttivita.Add(aIst);
                                     }
@@ -674,62 +674,21 @@ namespace FatturazioneContratti.Orders
 
         #region Costruzione record MaSaleOrdDetails
 
-        private MaSaleOrdDetails CreaRigaDescrittiva(MaSaleOrdDetails riga, // Riceve la copia pulita dal prototipo,
-                int iNewRowsCount, CurOrdRow cOrdRow, string descrizione)
+        private MaSaleOrdDetails CreaRigaNota(MaSaleOrdDetails riga, // Unificato: descrizione generica + riferimento
+                CurOrd cOrd, CurOrdRow cOrdRow, string descrizione, int iNewRowsCount, LineType lineType, short position = 0)
         {
-            riga.Line = (short)(cOrdRow.Parent.LastLine + iNewRowsCount);
-            riga.Position = 0;
-            riga.SubId = cOrdRow.Parent.LastSubId + iNewRowsCount;
-            riga.SaleOrdId = cOrdRow.Parent.SaleOrdId;
-            riga.LineType = (int)LineType.Nota;
+            riga.Line = (short)(cOrd.LastLine + iNewRowsCount);
+            riga.Position = position;
+            riga.SubId = cOrd.LastSubId + iNewRowsCount;
+            riga.SaleOrdId = cOrd.SaleOrdId;
+            riga.LineType = (int)lineType;
             riga.Description = descrizione;
             riga.InEi = "1";
             riga.ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna;
             riga.ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna;
-            riga.InternalOrdNo = cOrdRow.Parent.OrdNo;
-            riga.Customer = cOrdRow.Parent.Cliente;
-            riga.OrderDate = cOrdRow.Parent.OrdDate;
-            riga.Tbcreated = _now;
-            riga.Tbmodified = _now;
-            riga.TbcreatedId = _loginId;
-            riga.TbmodifiedId = _loginId;
-            riga.Item = string.Empty;
-            riga.UoM = string.Empty;
-            riga.Qty = 0;
-            riga.UnitValue = 0;
-            riga.TaxableAmount = 0;
-            riga.TotalAmount = 0;
-            riga.PacksUoM = string.Empty;
-            riga.TaxCode = string.Empty;
-            riga.Job = string.Empty;
-            riga.CostCenter = string.Empty;
-            riga.Offset = string.Empty;
-            riga.Notes = string.Empty;
-            riga.NetPrice = 0;
-            riga.ContractCode = string.Empty;
-            riga.ProjectCode = string.Empty;
-            riga.AllNrCanoni = 0;
-            riga.AllCanoniDataI = DomainConstants.DataNulla;
-            riga.AllCanoniDataF = DomainConstants.DataNulla;
-            riga.Invoiced = "0";
-
-            return riga;
-        }
-
-        private MaSaleOrdDetails CreaRigaRiferimento(MaSaleOrdDetails riga, CurOrd cOrd, CurOrdRow cOrdRow, string descriRif, int iNewRowsCount, short pos)
-        {
-            riga.Line = (short)(cOrd.LastLine + iNewRowsCount);
-            riga.Position = pos;
-            riga.SubId = cOrd.LastSubId + iNewRowsCount;
-            riga.SaleOrdId = cOrd.SaleOrdId;
-            riga.LineType = (int)LineType.Riferimento;
-            riga.Description = descriRif;
-            riga.InEi = "1";
-            riga.ExpectedDeliveryDate = cOrdRow.DataPrevistaConsegna;
-            riga.ConfirmedDeliveryDate = cOrdRow.DataConfermaConsegna;
-            riga.InternalOrdNo = cOrdRow.Parent.OrdNo;
-            riga.Customer = cOrdRow.Parent.Cliente;
-            riga.OrderDate = cOrdRow.Parent.OrdDate;
+            riga.InternalOrdNo = cOrd.OrdNo;
+            riga.Customer = cOrd.Cliente;
+            riga.OrderDate = cOrd.OrdDate;
             riga.Tbcreated = _now;
             riga.Tbmodified = _now;
             riga.TbcreatedId = _loginId;
@@ -816,6 +775,8 @@ namespace FatturazioneContratti.Orders
 
             return riga;
         }
+
+
 
         private MaSaleOrdDetails CreaRigaServizioValore(
             MaSaleOrdDetails riga,
