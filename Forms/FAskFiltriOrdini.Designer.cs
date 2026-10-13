@@ -28,7 +28,7 @@
             this.GroupOrdini = new System.Windows.Forms.GroupBox();
             this.TxtordPriorita = new System.Windows.Forms.TextBox();
             this.ChkPriorita = new System.Windows.Forms.CheckBox();
-            this.TxtOrdFiliale = new System.Windows.Forms.TextBox();
+            this.CmbFiliale = new System.Windows.Forms.ComboBox();
             this.ChkFiliale = new System.Windows.Forms.CheckBox();
             this.ChkCliente = new System.Windows.Forms.CheckBox();
             this.ChkNrOrdine = new System.Windows.Forms.CheckBox();
@@ -154,7 +154,7 @@
             // 
             this.GroupOrdini.Controls.Add(this.TxtordPriorita);
             this.GroupOrdini.Controls.Add(this.ChkPriorita);
-            this.GroupOrdini.Controls.Add(this.TxtOrdFiliale);
+            this.GroupOrdini.Controls.Add(this.CmbFiliale);
             this.GroupOrdini.Controls.Add(this.ChkFiliale);
             this.GroupOrdini.Controls.Add(this.ChkCliente);
             this.GroupOrdini.Controls.Add(this.ChkNrOrdine);
@@ -192,13 +192,15 @@
             this.ChkPriorita.UseVisualStyleBackColor = true;
             this.ChkPriorita.CheckedChanged += new System.EventHandler(this.ChkPriorita_CheckedChanged);
             // 
-            // TxtOrdFiliale
+            // CmbFiliale
             // 
-            this.TxtOrdFiliale.Enabled = false;
-            this.TxtOrdFiliale.Location = new System.Drawing.Point(110, 171);
-            this.TxtOrdFiliale.Name = "TxtOrdFiliale";
-            this.TxtOrdFiliale.Size = new System.Drawing.Size(96, 20);
-            this.TxtOrdFiliale.TabIndex = 10;
+            this.CmbFiliale.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.CmbFiliale.Enabled = false;
+            this.CmbFiliale.FormattingEnabled = true;
+            this.CmbFiliale.Location = new System.Drawing.Point(110, 171);
+            this.CmbFiliale.Name = "CmbFiliale";
+            this.CmbFiliale.Size = new System.Drawing.Size(96, 21);
+            this.CmbFiliale.TabIndex = 10;
             // 
             // ChkFiliale
             // 
@@ -685,7 +687,7 @@
         internal System.Windows.Forms.CheckBox ChkP_Quadrimestrali;
         internal System.Windows.Forms.CheckBox ChkP_Semestrali;
         internal System.Windows.Forms.CheckBox ChkP_Annuali;
-        internal System.Windows.Forms.TextBox TxtOrdFiliale;
+        internal System.Windows.Forms.ComboBox CmbFiliale;
         internal System.Windows.Forms.CheckBox ChkFiliale;
         internal System.Windows.Forms.GroupBox GroupIstat;
         internal System.Windows.Forms.Label Label1;

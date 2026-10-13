@@ -16,7 +16,18 @@ namespace FatturazioneContratti.Forms
     public partial class FAskFiltriOrdini : Form
     {
         public bool IsIstat { get; set; }
-        private double perc;
+        private readonly List<KeyValuePair<string, string>> _filiali = new()
+        {
+            new("TO", "TORINO"),
+            new("MI", "MILANO"),
+            new("AT", "ASTI"),
+            new("AO", "AOSTA"),
+            new("NO", "NOVARA"),
+            new("BI", "VERCELLI/BIELLA"),
+            new("VA", "VARESE"),
+            new("CN", "CUNEO"),
+            new("AL", "ALESSANDRIA")
+        };
 
         public FAskFiltriOrdini()
         {
@@ -28,8 +39,14 @@ namespace FatturazioneContratti.Forms
 
         private void FAskFiltriOrdini_Load(object sender, EventArgs e)
         {
-            // this.Size = new Size(504, 400);
             ToolTip1 = new ToolTip();
+
+            // Popola combo filiale
+            CmbFiliale.DisplayMember = "Value";
+            CmbFiliale.ValueMember = "Key";
+            CmbFiliale.DataSource = _filiali.ToList();
+            CmbFiliale.SelectedIndex = -1;
+            CmbFiliale.Enabled = false;
 
             if (IsIstat)
             {
@@ -61,7 +78,7 @@ namespace FatturazioneContratti.Forms
 
                 s = "Campo 'Centro di Costo' di Mago";
                 ToolTip1.SetToolTip(this.ChkFiliale, s);
-                ToolTip1.SetToolTip(this.TxtOrdFiliale, s);
+                ToolTip1.SetToolTip(this.CmbFiliale, s);
             }
         }
 
@@ -95,7 +112,7 @@ namespace FatturazioneContratti.Forms
 
         private void ChkFiliale_CheckedChanged(object sender, EventArgs e)
         {
-            TxtOrdFiliale.Enabled = ChkFiliale.Checked;
+            CmbFiliale.Enabled = ChkFiliale.Checked;
         }
 
         private void ChkPriorita_CheckedChanged(object sender, EventArgs e)
@@ -116,7 +133,7 @@ namespace FatturazioneContratti.Forms
 
         private void TxtPercIstat_TextChanged(object sender, EventArgs e)
         {
-            double.TryParse(TxtPercIstat.Text, out perc);
+            // Nessuno stato da mantenere: la percentuale viene riletta in OttieniFiltri().
         }
 
         private void DtaDecorrenza_ValueChanged(object sender, EventArgs e)
@@ -161,7 +178,7 @@ namespace FatturazioneContratti.Forms
                 SingoloCliente = ChkCliente.Checked,
                 Cliente = TxtOrdCliente.Text,
                 SingolaFiliale = ChkFiliale.Checked,
-                Filiale = TxtOrdFiliale.Text,
+                Filiale = CmbFiliale.SelectedValue?.ToString() ?? string.Empty,
                 SingolaPriorita = ChkPriorita.Checked,
                 Priorita = TxtordPriorita.Text,
                 DataFattDa = DtaFattDa.Value.Date,
