@@ -16,7 +16,7 @@
   
   <PropertyGroup>
     <SatelliteResourceLanguages>it;it-IT</SatelliteResourceLanguages>
-    <RunAnalyzersDuringLiveAnalysis>False</RunAnalyzersDuringLiveAnalysis>
+    <RunAnalyzersDuringLiveAnalysis>True</RunAnalyzersDuringLiveAnalysis>
   </PropertyGroup>
 
   <ItemGroup>

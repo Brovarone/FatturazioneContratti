@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <asmv1:assembly xsi:schemaLocation="urn:schemas-microsoft-com:asm.v1 assembly.adaptive.xsd" manifestVersion="1.0" xmlns:asmv1="urn:schemas-microsoft-com:asm.v1" xmlns="urn:schemas-microsoft-com:asm.v2" xmlns:asmv2="urn:schemas-microsoft-com:asm.v2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:co.v1="urn:schemas-microsoft-com:clickonce.v1" xmlns:asmv3="urn:schemas-microsoft-com:asm.v3" xmlns:dsig="http://www.w3.org/2000/09/xmldsig#" xmlns:co.v2="urn:schemas-microsoft-com:clickonce.v2">
-  <asmv1:assemblyIdentity name="FatturazioneContratti.exe" version="1.0.0.9" publicKeyToken="0000000000000000" language="neutral" processorArchitecture="msil" type="win32" />
+  <asmv1:assemblyIdentity name="FatturazioneContratti.exe" version="1.0.0.10" publicKeyToken="0000000000000000" language="neutral" processorArchitecture="msil" type="win32" />
+  <description asmv2:iconFile="FatturazioneContratti.ico" xmlns="urn:schemas-microsoft-com:asm.v1" />
   <application />
   <entryPoint>
     <assemblyIdentity name="Launcher" version="8.0.0.0" language="neutral" processorArchitecture="msil" />
@@ -134,22 +135,31 @@
       <dsig:DigestValue>DLtfE7wy4XeWmmS/wD3UcZDp7w9CX3cFmJmvfUGPjGM=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="FatturazioneContratti.dll" size="1268736">
+  <file name="FatturazioneContratti.dll" size="1298944">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>3gXgKN7K3WfX/WKXsBdLUylAjIrsNZSCckGHDPiArVQ=</dsig:DigestValue>
+      <dsig:DigestValue>RpyosmF+mpdtXEa3r+TSto5bXwtLKbpuK0JEAulZ2dc=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="FatturazioneContratti.exe" size="151040">
+  <file name="FatturazioneContratti.exe" size="167424">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>bwbSZ1U89N0vF69q17c8PqLgkbawittKbsw9qLwcKAo=</dsig:DigestValue>
+      <dsig:DigestValue>w2+CIgnC8gZH9Fk22Z5bApMDI1p8oiZt0FHfSvg6U7s=</dsig:DigestValue>
+    </hash>
+  </file>
+  <file name="FatturazioneContratti.ico" size="15406">
+    <hash>
+      <dsig:Transforms>
+        <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
+      </dsig:Transforms>
+      <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
+      <dsig:DigestValue>yNzj1yryktgEKRhQw/VLBg4waRfmifurCOEbdnCS1bs=</dsig:DigestValue>
     </hash>
   </file>
   <file name="FatturazioneContratti.runtimeconfig.json" size="584">
