@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Windows.Forms;
 using FatturazioneContratti.Config;
+using FatturazioneContratti.Data;
 
 namespace FatturazioneContratti.Forms
 {
@@ -14,6 +15,19 @@ namespace FatturazioneContratti.Forms
         private void FSettings_Load(object sender, EventArgs e)
         {
             // Carica valori attuali da AppConfig
+            AppConfig.Load();
+
+            // Connessione e flags
+            txtServer.Text = AppConfig.SqlServer;
+            txtUser.Text = AppConfig.UserId;
+            txtPassword.Text = AppConfig.Password;
+            txtLoginId.Text = AppConfig.LoginId.ToString();
+            chkTestDb.Checked = AppConfig.IsTestDb;
+            chkDebug.Checked = AppConfig.IsDebugging;
+            if (AppConfig.IsDbUno) rdoUno.Checked = true; else rdoSpa.Checked = true;
+            lblDbInUso.Text = $"Database attivo: {AppConfig.DatabaseInUse}";
+
+            // Database logici e percorsi
             txtDbUno.Text = AppConfig.DatabaseUno;
             txtDbSpa.Text = AppConfig.DatabaseSpa;
             txtTmpDbUno.Text = AppConfig.TmpDatabaseUno;
@@ -40,9 +54,50 @@ namespace FatturazioneContratti.Forms
             AppConfig.ApriFileJson();
         }
 
+        private void btnTestConnection_Click(object sender, EventArgs e)
+        {
+            // Sincronizza temporaneamente i valori dalla UI in AppConfig (non ancora salvati)
+            AppConfig.SqlServer = txtServer.Text.Trim();
+            AppConfig.UserId = txtUser.Text.Trim();
+            AppConfig.Password = txtPassword.Text;
+            AppConfig.LoginId = int.TryParse(txtLoginId.Text.Trim(), out int id) ? id : AppConfig.LoginId;
+            AppConfig.IsTestDb = chkTestDb.Checked;
+            AppConfig.IsDbUno = rdoUno.Checked;
+            AppConfig.IsDebugging = chkDebug.Checked;
+
+            try
+            {
+                using var conn = SqlTools.OpenDirectConnection();
+                MessageBox.Show($"Connessione OK: {conn.Database} (Server: {conn.DataSource})", "Test Connessione", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Impossibile connettersi: {ex.Message}", "Errore", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void chkTestDb_CheckedChanged(object sender, EventArgs e)
+        {
+            // Aggiorna anteprima stato DB in uso nella form (AppConfig è già aggiornato dal Test o dal Save)
+            lblDbInUso.Text = $"Database attivo: {AppConfig.DatabaseInUse}";
+        }
+
+        private void rdoAzienda_CheckedChanged(object sender, EventArgs e)
+        {
+            // placeholder: lo stato effettivo viene salvato nel btnSalva
+        }
+
         private void btnSalva_Click(object sender, EventArgs e)
         {
             // Assegna e salva
+            AppConfig.SqlServer = txtServer.Text.Trim();
+            AppConfig.UserId = txtUser.Text.Trim();
+            AppConfig.Password = txtPassword.Text;
+            AppConfig.LoginId = int.TryParse(txtLoginId.Text.Trim(), out int id) ? id : 1;
+            AppConfig.IsTestDb = chkTestDb.Checked;
+            AppConfig.IsDbUno = rdoUno.Checked;
+            AppConfig.IsDebugging = chkDebug.Checked;
+
             AppConfig.DatabaseUno = txtDbUno.Text.Trim();
             AppConfig.DatabaseSpa = txtDbSpa.Text.Trim();
             AppConfig.TmpDatabaseUno = txtTmpDbUno.Text.Trim();
