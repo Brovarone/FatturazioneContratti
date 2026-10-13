@@ -177,10 +177,7 @@ DocProject/Help/Html2
 DocProject/Help/html
 
 # Click-Once directory
-publish/
-# ECCEZIONE: Includi specificatamente la cartella di pubblicazione ClickOnce
-!bin/publish/
-!bin/publish/**
+#publish/
 
 # Publish Web Output
 *.[Pp]ublish.xml
