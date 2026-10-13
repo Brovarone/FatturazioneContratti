@@ -17,283 +17,359 @@
 
         private void InitializeComponent()
         {
-            this.TableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
-            this.OK_Button = new System.Windows.Forms.Button();
-            this.Cancel_Button = new System.Windows.Forms.Button();
-            this.LblMonth = new System.Windows.Forms.Label();
-            this.RadOnlyCheck = new System.Windows.Forms.RadioButton();
-            this.RadCheckAndFatt = new System.Windows.Forms.RadioButton();
-            this.RadOnlyFatt = new System.Windows.Forms.RadioButton();
-            this.Label1 = new System.Windows.Forms.Label();
-            this.DtaFatt = new System.Windows.Forms.DateTimePicker();
-            this.CmbMonth = new System.Windows.Forms.ComboBox();
-            this.TxtOrdFiliale = new System.Windows.Forms.TextBox();
-            this.ChkFiliale = new System.Windows.Forms.CheckBox();
-            this.firstLogDate = new System.Windows.Forms.DateTimePicker();
-            this.lastLogDate = new System.Windows.Forms.DateTimePicker();
-            this.ChkNoFilter = new System.Windows.Forms.CheckBox();
-            this.CmbYear = new System.Windows.Forms.ComboBox();
-            this.LblYear = new System.Windows.Forms.Label();
-            this.ChkRiassegna = new System.Windows.Forms.CheckBox();
-            this.GroupBoxCheck = new System.Windows.Forms.GroupBox();
-            this.TableLayoutPanel1.SuspendLayout();
-            this.GroupBoxCheck.SuspendLayout();
-            this.SuspendLayout();
+            TableLayoutPanelButtons = new TableLayoutPanel();
+            OK_Button = new Button();
+            Cancel_Button = new Button();
+            GrpInterventiFilter = new GroupBox();
+            RadInterventiNoFilter = new RadioButton();
+            RadInterventiMeseAnno = new RadioButton();
+            LblMonth = new Label();
+            CmbMonth = new ComboBox();
+            LblYear = new Label();
+            CmbYear = new ComboBox();
+            RadInterventiDateRange = new RadioButton();
+            LblInterventiDa = new Label();
+            DtpInterventiDa = new DateTimePicker();
+            LblInterventiA = new Label();
+            DtpInterventiA = new DateTimePicker();
+            GrpAzione = new GroupBox();
+            RadAzioneSoloControllo = new RadioButton();
+            RadAzioneControlloFattura = new RadioButton();
+            RadAzioneSoloFattura = new RadioButton();
+            ChkRiassegna = new CheckBox();
+            LblDataFattura = new Label();
+            DtpDataFattura = new DateTimePicker();
+            ChkFiliale = new CheckBox();
+            CmbFiliale = new ComboBox();
+            TableLayoutPanelButtons.SuspendLayout();
+            GrpInterventiFilter.SuspendLayout();
+            GrpAzione.SuspendLayout();
+            SuspendLayout();
             // 
-            // TableLayoutPanel1
+            // TableLayoutPanelButtons
             // 
-            this.TableLayoutPanel1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
-            this.TableLayoutPanel1.ColumnCount = 2;
-            this.TableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
-            this.TableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
-            this.TableLayoutPanel1.Controls.Add(this.OK_Button, 0, 0);
-            this.TableLayoutPanel1.Controls.Add(this.Cancel_Button, 1, 0);
-            this.TableLayoutPanel1.Location = new System.Drawing.Point(154, 291);
-            this.TableLayoutPanel1.Name = "TableLayoutPanel1";
-            this.TableLayoutPanel1.RowCount = 1;
-            this.TableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 50F));
-            this.TableLayoutPanel1.Size = new System.Drawing.Size(146, 29);
-            this.TableLayoutPanel1.TabIndex = 0;
+            TableLayoutPanelButtons.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            TableLayoutPanelButtons.ColumnCount = 2;
+            TableLayoutPanelButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            TableLayoutPanelButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            TableLayoutPanelButtons.Controls.Add(OK_Button, 0, 0);
+            TableLayoutPanelButtons.Controls.Add(Cancel_Button, 1, 0);
+            TableLayoutPanelButtons.Location = new Point(220, 420);
+            TableLayoutPanelButtons.Margin = new Padding(4, 3, 4, 3);
+            TableLayoutPanelButtons.Name = "TableLayoutPanelButtons";
+            TableLayoutPanelButtons.RowCount = 1;
+            TableLayoutPanelButtons.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+            TableLayoutPanelButtons.Size = new Size(170, 33);
+            TableLayoutPanelButtons.TabIndex = 0;
             // 
             // OK_Button
             // 
-            this.OK_Button.Anchor = System.Windows.Forms.AnchorStyles.None;
-            this.OK_Button.Location = new System.Drawing.Point(3, 3);
-            this.OK_Button.Name = "OK_Button";
-            this.OK_Button.Size = new System.Drawing.Size(67, 23);
-            this.OK_Button.TabIndex = 0;
-            this.OK_Button.Text = "OK";
-            this.OK_Button.Click += new System.EventHandler(this.OK_Button_Click);
+            OK_Button.Anchor = AnchorStyles.None;
+            OK_Button.Location = new Point(4, 3);
+            OK_Button.Margin = new Padding(4, 3, 4, 3);
+            OK_Button.Name = "OK_Button";
+            OK_Button.Size = new Size(77, 27);
+            OK_Button.TabIndex = 0;
+            OK_Button.Text = "OK";
+            OK_Button.UseVisualStyleBackColor = true;
+            OK_Button.Click += OK_Button_Click;
             // 
             // Cancel_Button
             // 
-            this.Cancel_Button.Anchor = System.Windows.Forms.AnchorStyles.None;
-            this.Cancel_Button.DialogResult = System.Windows.Forms.DialogResult.Cancel;
-            this.Cancel_Button.Location = new System.Drawing.Point(76, 3);
-            this.Cancel_Button.Name = "Cancel_Button";
-            this.Cancel_Button.Size = new System.Drawing.Size(67, 23);
-            this.Cancel_Button.TabIndex = 1;
-            this.Cancel_Button.Text = "Annulla";
-            this.Cancel_Button.Click += new System.EventHandler(this.Cancel_Button_Click);
+            Cancel_Button.Anchor = AnchorStyles.None;
+            Cancel_Button.DialogResult = DialogResult.Cancel;
+            Cancel_Button.Location = new Point(89, 3);
+            Cancel_Button.Margin = new Padding(4, 3, 4, 3);
+            Cancel_Button.Name = "Cancel_Button";
+            Cancel_Button.Size = new Size(77, 27);
+            Cancel_Button.TabIndex = 1;
+            Cancel_Button.Text = "Annulla";
+            Cancel_Button.UseVisualStyleBackColor = true;
+            Cancel_Button.Click += Cancel_Button_Click;
+            // 
+            // GrpInterventiFilter
+            // 
+            GrpInterventiFilter.Controls.Add(RadInterventiNoFilter);
+            GrpInterventiFilter.Controls.Add(RadInterventiMeseAnno);
+            GrpInterventiFilter.Controls.Add(LblMonth);
+            GrpInterventiFilter.Controls.Add(CmbMonth);
+            GrpInterventiFilter.Controls.Add(LblYear);
+            GrpInterventiFilter.Controls.Add(CmbYear);
+            GrpInterventiFilter.Controls.Add(RadInterventiDateRange);
+            GrpInterventiFilter.Controls.Add(LblInterventiDa);
+            GrpInterventiFilter.Controls.Add(DtpInterventiDa);
+            GrpInterventiFilter.Controls.Add(LblInterventiA);
+            GrpInterventiFilter.Controls.Add(DtpInterventiA);
+            GrpInterventiFilter.Location = new Point(12, 12);
+            GrpInterventiFilter.Name = "GrpInterventiFilter";
+            GrpInterventiFilter.Size = new Size(370, 162);
+            GrpInterventiFilter.TabIndex = 1;
+            GrpInterventiFilter.TabStop = false;
+            GrpInterventiFilter.Text = "Filtro Interventi (IntegraInterventi)";
+            // 
+            // RadInterventiNoFilter
+            // 
+            RadInterventiNoFilter.AutoSize = true;
+            RadInterventiNoFilter.Location = new Point(10, 22);
+            RadInterventiNoFilter.Name = "RadInterventiNoFilter";
+            RadInterventiNoFilter.Size = new Size(68, 19);
+            RadInterventiNoFilter.TabIndex = 0;
+            RadInterventiNoFilter.TabStop = true;
+            RadInterventiNoFilter.Text = "No filter";
+            RadInterventiNoFilter.UseVisualStyleBackColor = true;
+            RadInterventiNoFilter.CheckedChanged += RadInterventiFilter_CheckedChanged;
+            // 
+            // RadInterventiMeseAnno
+            // 
+            RadInterventiMeseAnno.AutoSize = true;
+            RadInterventiMeseAnno.Location = new Point(10, 47);
+            RadInterventiMeseAnno.Name = "RadInterventiMeseAnno";
+            RadInterventiMeseAnno.Size = new Size(93, 19);
+            RadInterventiMeseAnno.TabIndex = 1;
+            RadInterventiMeseAnno.TabStop = true;
+            RadInterventiMeseAnno.Text = "Mese / Anno";
+            RadInterventiMeseAnno.UseVisualStyleBackColor = true;
+            RadInterventiMeseAnno.CheckedChanged += RadInterventiFilter_CheckedChanged;
             // 
             // LblMonth
             // 
-            this.LblMonth.AutoSize = true;
-            this.LblMonth.Location = new System.Drawing.Point(12, 36);
-            this.LblMonth.Name = "LblMonth";
-            this.LblMonth.Size = new System.Drawing.Size(33, 13);
-            this.LblMonth.TabIndex = 2;
-            this.LblMonth.Text = "Mese";
-            // 
-            // RadOnlyCheck
-            // 
-            this.RadOnlyCheck.AutoSize = true;
-            this.RadOnlyCheck.Checked = true;
-            this.RadOnlyCheck.Enabled = false;
-            this.RadOnlyCheck.Location = new System.Drawing.Point(6, 19);
-            this.RadOnlyCheck.Name = "RadOnlyCheck";
-            this.RadOnlyCheck.Size = new System.Drawing.Size(90, 17);
-            this.RadOnlyCheck.TabIndex = 3;
-            this.RadOnlyCheck.TabStop = true;
-            this.RadOnlyCheck.Text = "Solo Controllo";
-            this.RadOnlyCheck.UseVisualStyleBackColor = true;
-            // 
-            // RadCheckAndFatt
-            // 
-            this.RadCheckAndFatt.AutoSize = true;
-            this.RadCheckAndFatt.Enabled = false;
-            this.RadCheckAndFatt.Location = new System.Drawing.Point(6, 42);
-            this.RadCheckAndFatt.Name = "RadCheckAndFatt";
-            this.RadCheckAndFatt.Size = new System.Drawing.Size(136, 17);
-            this.RadCheckAndFatt.TabIndex = 4;
-            this.RadCheckAndFatt.Text = "Controllo + Fatturazione";
-            this.RadCheckAndFatt.UseVisualStyleBackColor = true;
-            // 
-            // RadOnlyFatt
-            // 
-            this.RadOnlyFatt.AutoSize = true;
-            this.RadOnlyFatt.Enabled = false;
-            this.RadOnlyFatt.Location = new System.Drawing.Point(6, 87);
-            this.RadOnlyFatt.Name = "RadOnlyFatt";
-            this.RadOnlyFatt.Size = new System.Drawing.Size(107, 17);
-            this.RadOnlyFatt.TabIndex = 5;
-            this.RadOnlyFatt.Text = "Solo Fatturazione";
-            this.RadOnlyFatt.UseVisualStyleBackColor = true;
-            this.RadOnlyFatt.CheckedChanged += new System.EventHandler(this.RadOnlyFatt_CheckedChanged);
-            // 
-            // Label1
-            // 
-            this.Label1.AutoSize = true;
-            this.Label1.Location = new System.Drawing.Point(12, 223);
-            this.Label1.Name = "Label1";
-            this.Label1.Size = new System.Drawing.Size(54, 13);
-            this.Label1.TabIndex = 7;
-            this.Label1.Text = "Data Fatt.";
-            // 
-            // DtaFatt
-            // 
-            this.DtaFatt.Enabled = false;
-            this.DtaFatt.Format = System.Windows.Forms.DateTimePickerFormat.Short;
-            this.DtaFatt.Location = new System.Drawing.Point(72, 220);
-            this.DtaFatt.Name = "DtaFatt";
-            this.DtaFatt.Size = new System.Drawing.Size(96, 20);
-            this.DtaFatt.TabIndex = 8;
+            LblMonth.AutoSize = true;
+            LblMonth.Location = new Point(30, 74);
+            LblMonth.Name = "LblMonth";
+            LblMonth.Size = new Size(35, 15);
+            LblMonth.TabIndex = 3;
+            LblMonth.Text = "Mese";
             // 
             // CmbMonth
             // 
-            this.CmbMonth.Enabled = false;
-            this.CmbMonth.FormattingEnabled = true;
-            this.CmbMonth.Location = new System.Drawing.Point(72, 33);
-            this.CmbMonth.Name = "CmbMonth";
-            this.CmbMonth.Size = new System.Drawing.Size(106, 21);
-            this.CmbMonth.TabIndex = 9;
-            this.CmbMonth.SelectedIndexChanged += new System.EventHandler(this.CmbMonth_SelectedIndexChanged);
-            // 
-            // TxtOrdFiliale
-            // 
-            this.TxtOrdFiliale.Enabled = false;
-            this.TxtOrdFiliale.Location = new System.Drawing.Point(107, 246);
-            this.TxtOrdFiliale.Name = "TxtOrdFiliale";
-            this.TxtOrdFiliale.Size = new System.Drawing.Size(96, 20);
-            this.TxtOrdFiliale.TabIndex = 12;
-            // 
-            // ChkFiliale
-            // 
-            this.ChkFiliale.AutoSize = true;
-            this.ChkFiliale.Enabled = false;
-            this.ChkFiliale.Location = new System.Drawing.Point(6, 246);
-            this.ChkFiliale.Name = "ChkFiliale";
-            this.ChkFiliale.Size = new System.Drawing.Size(90, 17);
-            this.ChkFiliale.TabIndex = 11;
-            this.ChkFiliale.Text = "Singola Filiale";
-            this.ChkFiliale.UseVisualStyleBackColor = true;
-            this.ChkFiliale.CheckedChanged += new System.EventHandler(this.ChkFiliale_CheckedChanged);
-            // 
-            // firstLogDate
-            // 
-            this.firstLogDate.Format = System.Windows.Forms.DateTimePickerFormat.Short;
-            this.firstLogDate.Location = new System.Drawing.Point(201, 33);
-            this.firstLogDate.Name = "firstLogDate";
-            this.firstLogDate.Size = new System.Drawing.Size(96, 20);
-            this.firstLogDate.TabIndex = 13;
-            // 
-            // lastLogDate
-            // 
-            this.lastLogDate.Format = System.Windows.Forms.DateTimePickerFormat.Short;
-            this.lastLogDate.Location = new System.Drawing.Point(201, 59);
-            this.lastLogDate.Name = "lastLogDate";
-            this.lastLogDate.Size = new System.Drawing.Size(96, 20);
-            this.lastLogDate.TabIndex = 14;
-            // 
-            // ChkNoFilter
-            // 
-            this.ChkNoFilter.AutoSize = true;
-            this.ChkNoFilter.Location = new System.Drawing.Point(15, 10);
-            this.ChkNoFilter.Name = "ChkNoFilter";
-            this.ChkNoFilter.Size = new System.Drawing.Size(48, 17);
-            this.ChkNoFilter.TabIndex = 15;
-            this.ChkNoFilter.Text = "Filtra";
-            this.ChkNoFilter.UseVisualStyleBackColor = true;
-            this.ChkNoFilter.CheckedChanged += new System.EventHandler(this.ChkNoFilter_CheckedChanged);
-            // 
-            // CmbYear
-            // 
-            this.CmbYear.Enabled = false;
-            this.CmbYear.FormattingEnabled = true;
-            this.CmbYear.Location = new System.Drawing.Point(72, 62);
-            this.CmbYear.Name = "CmbYear";
-            this.CmbYear.Size = new System.Drawing.Size(106, 21);
-            this.CmbYear.TabIndex = 17;
-            this.CmbYear.SelectedIndexChanged += new System.EventHandler(this.CmbYear_SelectedIndexChanged);
+            CmbMonth.DropDownStyle = ComboBoxStyle.DropDownList;
+            CmbMonth.FormattingEnabled = true;
+            CmbMonth.Location = new Point(75, 71);
+            CmbMonth.Name = "CmbMonth";
+            CmbMonth.Size = new Size(123, 23);
+            CmbMonth.TabIndex = 4;
+            CmbMonth.SelectedIndexChanged += CmbMonth_SelectedIndexChanged;
             // 
             // LblYear
             // 
-            this.LblYear.AutoSize = true;
-            this.LblYear.Location = new System.Drawing.Point(12, 65);
-            this.LblYear.Name = "LblYear";
-            this.LblYear.Size = new System.Drawing.Size(32, 13);
-            this.LblYear.TabIndex = 16;
-            this.LblYear.Text = "Anno";
+            LblYear.AutoSize = true;
+            LblYear.Location = new Point(210, 74);
+            LblYear.Name = "LblYear";
+            LblYear.Size = new Size(36, 15);
+            LblYear.TabIndex = 5;
+            LblYear.Text = "Anno";
+            // 
+            // CmbYear
+            // 
+            CmbYear.DropDownStyle = ComboBoxStyle.DropDownList;
+            CmbYear.FormattingEnabled = true;
+            CmbYear.Location = new Point(255, 71);
+            CmbYear.Name = "CmbYear";
+            CmbYear.Size = new Size(80, 23);
+            CmbYear.TabIndex = 6;
+            CmbYear.SelectedIndexChanged += CmbYear_SelectedIndexChanged;
+            // 
+            // RadInterventiDateRange
+            // 
+            RadInterventiDateRange.AutoSize = true;
+            RadInterventiDateRange.Location = new Point(10, 100);
+            RadInterventiDateRange.Name = "RadInterventiDateRange";
+            RadInterventiDateRange.Size = new Size(85, 19);
+            RadInterventiDateRange.TabIndex = 2;
+            RadInterventiDateRange.TabStop = true;
+            RadInterventiDateRange.Text = "Date Da / A";
+            RadInterventiDateRange.UseVisualStyleBackColor = true;
+            RadInterventiDateRange.CheckedChanged += RadInterventiFilter_CheckedChanged;
+            // 
+            // LblInterventiDa
+            // 
+            LblInterventiDa.AutoSize = true;
+            LblInterventiDa.Location = new Point(30, 127);
+            LblInterventiDa.Name = "LblInterventiDa";
+            LblInterventiDa.Size = new Size(21, 15);
+            LblInterventiDa.TabIndex = 7;
+            LblInterventiDa.Text = "Da";
+            // 
+            // DtpInterventiDa
+            // 
+            DtpInterventiDa.Format = DateTimePickerFormat.Short;
+            DtpInterventiDa.Location = new Point(75, 123);
+            DtpInterventiDa.Name = "DtpInterventiDa";
+            DtpInterventiDa.Size = new Size(111, 23);
+            DtpInterventiDa.TabIndex = 8;
+            DtpInterventiDa.ValueChanged += DtpInterventiDa_ValueChanged;
+            // 
+            // LblInterventiA
+            // 
+            LblInterventiA.AutoSize = true;
+            LblInterventiA.Location = new Point(210, 127);
+            LblInterventiA.Name = "LblInterventiA";
+            LblInterventiA.Size = new Size(15, 15);
+            LblInterventiA.TabIndex = 9;
+            LblInterventiA.Text = "A";
+            // 
+            // DtpInterventiA
+            // 
+            DtpInterventiA.Format = DateTimePickerFormat.Short;
+            DtpInterventiA.Location = new Point(255, 123);
+            DtpInterventiA.Name = "DtpInterventiA";
+            DtpInterventiA.Size = new Size(111, 23);
+            DtpInterventiA.TabIndex = 10;
+            DtpInterventiA.ValueChanged += DtpInterventiA_ValueChanged;
+            // 
+            // GrpAzione
+            // 
+            GrpAzione.Controls.Add(RadAzioneSoloControllo);
+            GrpAzione.Controls.Add(RadAzioneControlloFattura);
+            GrpAzione.Controls.Add(RadAzioneSoloFattura);
+            GrpAzione.Controls.Add(ChkRiassegna);
+            GrpAzione.Controls.Add(LblDataFattura);
+            GrpAzione.Controls.Add(DtpDataFattura);
+            GrpAzione.Location = new Point(12, 180);
+            GrpAzione.Name = "GrpAzione";
+            GrpAzione.Size = new Size(370, 130);
+            GrpAzione.TabIndex = 2;
+            GrpAzione.TabStop = false;
+            GrpAzione.Text = "Cosa fare";
+            // 
+            // RadAzioneSoloControllo
+            // 
+            RadAzioneSoloControllo.AutoSize = true;
+            RadAzioneSoloControllo.Location = new Point(10, 22);
+            RadAzioneSoloControllo.Name = "RadAzioneSoloControllo";
+            RadAzioneSoloControllo.Size = new Size(99, 19);
+            RadAzioneSoloControllo.TabIndex = 0;
+            RadAzioneSoloControllo.TabStop = true;
+            RadAzioneSoloControllo.Text = "Solo controllo";
+            RadAzioneSoloControllo.UseVisualStyleBackColor = true;
+            RadAzioneSoloControllo.CheckedChanged += RadAzione_CheckedChanged;
+            // 
+            // RadAzioneControlloFattura
+            // 
+            RadAzioneControlloFattura.AutoSize = true;
+            RadAzioneControlloFattura.Location = new Point(10, 47);
+            RadAzioneControlloFattura.Name = "RadAzioneControlloFattura";
+            RadAzioneControlloFattura.Size = new Size(154, 19);
+            RadAzioneControlloFattura.TabIndex = 1;
+            RadAzioneControlloFattura.TabStop = true;
+            RadAzioneControlloFattura.Text = "Controllo + Fatturazione";
+            RadAzioneControlloFattura.UseVisualStyleBackColor = true;
+            RadAzioneControlloFattura.CheckedChanged += RadAzione_CheckedChanged;
+            // 
+            // RadAzioneSoloFattura
+            // 
+            RadAzioneSoloFattura.AutoSize = true;
+            RadAzioneSoloFattura.Location = new Point(10, 72);
+            RadAzioneSoloFattura.Name = "RadAzioneSoloFattura";
+            RadAzioneSoloFattura.Size = new Size(114, 19);
+            RadAzioneSoloFattura.TabIndex = 2;
+            RadAzioneSoloFattura.TabStop = true;
+            RadAzioneSoloFattura.Text = "Solo fatturazione";
+            RadAzioneSoloFattura.UseVisualStyleBackColor = true;
+            RadAzioneSoloFattura.CheckedChanged += RadAzione_CheckedChanged;
             // 
             // ChkRiassegna
             // 
-            this.ChkRiassegna.AutoSize = true;
-            this.ChkRiassegna.Enabled = false;
-            this.ChkRiassegna.Location = new System.Drawing.Point(6, 65);
-            this.ChkRiassegna.Name = "ChkRiassegna";
-            this.ChkRiassegna.Size = new System.Drawing.Size(76, 17);
-            this.ChkRiassegna.TabIndex = 18;
-            this.ChkRiassegna.Text = "Riassegna";
-            this.ChkRiassegna.UseVisualStyleBackColor = true;
+            ChkRiassegna.AutoSize = true;
+            ChkRiassegna.Location = new Point(180, 22);
+            ChkRiassegna.Name = "ChkRiassegna";
+            ChkRiassegna.Size = new Size(78, 19);
+            ChkRiassegna.TabIndex = 3;
+            ChkRiassegna.Text = "Riassegna";
+            ChkRiassegna.UseVisualStyleBackColor = true;
             // 
-            // GroupBoxCheck
+            // LblDataFattura
             // 
-            this.GroupBoxCheck.Controls.Add(this.RadOnlyCheck);
-            this.GroupBoxCheck.Controls.Add(this.ChkRiassegna);
-            this.GroupBoxCheck.Controls.Add(this.RadCheckAndFatt);
-            this.GroupBoxCheck.Controls.Add(this.RadOnlyFatt);
-            this.GroupBoxCheck.Location = new System.Drawing.Point(72, 89);
-            this.GroupBoxCheck.Name = "GroupBoxCheck";
-            this.GroupBoxCheck.Size = new System.Drawing.Size(200, 114);
-            this.GroupBoxCheck.TabIndex = 19;
-            this.GroupBoxCheck.TabStop = false;
+            LblDataFattura.AutoSize = true;
+            LblDataFattura.Location = new Point(180, 74);
+            LblDataFattura.Name = "LblDataFattura";
+            LblDataFattura.Size = new Size(57, 15);
+            LblDataFattura.TabIndex = 4;
+            LblDataFattura.Text = "Data Fatt.";
+            // 
+            // DtpDataFattura
+            // 
+            DtpDataFattura.Format = DateTimePickerFormat.Short;
+            DtpDataFattura.Location = new Point(250, 70);
+            DtpDataFattura.Name = "DtpDataFattura";
+            DtpDataFattura.Size = new Size(111, 23);
+            DtpDataFattura.TabIndex = 5;
+            // 
+            // ChkFiliale
+            // 
+            ChkFiliale.AutoSize = true;
+            ChkFiliale.Location = new Point(12, 322);
+            ChkFiliale.Name = "ChkFiliale";
+            ChkFiliale.Size = new Size(98, 19);
+            ChkFiliale.TabIndex = 3;
+            ChkFiliale.Text = "Singola Filiale";
+            ChkFiliale.UseVisualStyleBackColor = true;
+            ChkFiliale.CheckedChanged += ChkFiliale_CheckedChanged;
+            // 
+            // CmbFiliale
+            // 
+            CmbFiliale.DropDownStyle = ComboBoxStyle.DropDownList;
+            CmbFiliale.FormattingEnabled = true;
+            CmbFiliale.Location = new Point(120, 320);
+            CmbFiliale.Name = "CmbFiliale";
+            CmbFiliale.Size = new Size(200, 23);
+            CmbFiliale.TabIndex = 4;
             // 
             // FAskFiltriOrdiniConsuntivo
             // 
-            this.AcceptButton = this.OK_Button;
-            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.CancelButton = this.Cancel_Button;
-            this.ClientSize = new System.Drawing.Size(312, 332);
-            this.Controls.Add(this.GroupBoxCheck);
-            this.Controls.Add(this.CmbYear);
-            this.Controls.Add(this.LblYear);
-            this.Controls.Add(this.ChkNoFilter);
-            this.Controls.Add(this.lastLogDate);
-            this.Controls.Add(this.firstLogDate);
-            this.Controls.Add(this.TxtOrdFiliale);
-            this.Controls.Add(this.ChkFiliale);
-            this.Controls.Add(this.CmbMonth);
-            this.Controls.Add(this.DtaFatt);
-            this.Controls.Add(this.Label1);
-            this.Controls.Add(this.LblMonth);
-            this.Controls.Add(this.TableLayoutPanel1);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.Name = "FAskFiltriOrdiniConsuntivo";
-            this.ShowInTaskbar = false;
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "Consuntivazione";
-            this.Load += new System.EventHandler(this.FAskFiltriOrdiniConsuntivo_Load);
-            this.TableLayoutPanel1.ResumeLayout(false);
-            this.GroupBoxCheck.ResumeLayout(false);
-            this.GroupBoxCheck.PerformLayout();
-            this.ResumeLayout(false);
-            this.PerformLayout();
-
+            AcceptButton = OK_Button;
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            CancelButton = Cancel_Button;
+            ClientSize = new Size(394, 465);
+            Controls.Add(CmbFiliale);
+            Controls.Add(ChkFiliale);
+            Controls.Add(GrpAzione);
+            Controls.Add(GrpInterventiFilter);
+            Controls.Add(TableLayoutPanelButtons);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            Margin = new Padding(4, 3, 4, 3);
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Name = "FAskFiltriOrdiniConsuntivo";
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "Consuntivazione";
+            Load += FAskFiltriOrdiniConsuntivo_Load;
+            TableLayoutPanelButtons.ResumeLayout(false);
+            GrpInterventiFilter.ResumeLayout(false);
+            GrpInterventiFilter.PerformLayout();
+            GrpAzione.ResumeLayout(false);
+            GrpAzione.PerformLayout();
+            ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion
 
-        internal System.Windows.Forms.TableLayoutPanel TableLayoutPanel1;
-        internal System.Windows.Forms.Button OK_Button;
-        internal System.Windows.Forms.Button Cancel_Button;
-        internal System.Windows.Forms.Label LblMonth;
-        internal System.Windows.Forms.RadioButton RadOnlyCheck;
-        internal System.Windows.Forms.RadioButton RadCheckAndFatt;
-        internal System.Windows.Forms.RadioButton RadOnlyFatt;
-        internal System.Windows.Forms.Label Label1;
-        internal System.Windows.Forms.DateTimePicker DtaFatt;
-        internal System.Windows.Forms.ComboBox CmbMonth;
-        internal System.Windows.Forms.TextBox TxtOrdFiliale;
-        internal System.Windows.Forms.CheckBox ChkFiliale;
-        internal System.Windows.Forms.DateTimePicker firstLogDate;
-        internal System.Windows.Forms.DateTimePicker lastLogDate;
-        internal System.Windows.Forms.CheckBox ChkNoFilter;
-        internal System.Windows.Forms.ComboBox CmbYear;
-        internal System.Windows.Forms.Label LblYear;
-        internal System.Windows.Forms.CheckBox ChkRiassegna;
-        internal System.Windows.Forms.GroupBox GroupBoxCheck;
+        internal TableLayoutPanel TableLayoutPanelButtons;
+        internal Button OK_Button;
+        internal Button Cancel_Button;
+        internal GroupBox GrpInterventiFilter;
+        internal RadioButton RadInterventiNoFilter;
+        internal RadioButton RadInterventiMeseAnno;
+        internal RadioButton RadInterventiDateRange;
+        internal Label LblMonth;
+        internal ComboBox CmbMonth;
+        internal Label LblYear;
+        internal ComboBox CmbYear;
+        internal Label LblInterventiDa;
+        internal DateTimePicker DtpInterventiDa;
+        internal Label LblInterventiA;
+        internal DateTimePicker DtpInterventiA;
+        internal GroupBox GrpAzione;
+        internal RadioButton RadAzioneSoloControllo;
+        internal RadioButton RadAzioneControlloFattura;
+        internal RadioButton RadAzioneSoloFattura;
+        internal CheckBox ChkRiassegna;
+        internal Label LblDataFattura;
+        internal DateTimePicker DtpDataFattura;
+        internal CheckBox ChkFiliale;
+        internal ComboBox CmbFiliale;
     }
 }
