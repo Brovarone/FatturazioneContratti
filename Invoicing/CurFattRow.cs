@@ -1,6 +1,6 @@
 using System;
 using EFMago.Models;
-using FatturazioneContratti.Orders;
+using FatturazioneContratti.Common;
 
 namespace FatturazioneContratti.Invoicing
 {

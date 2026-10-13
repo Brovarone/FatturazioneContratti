@@ -1,13 +1,15 @@
+using EFCore.BulkExtensions;
+using EFMago.Models;
+using FatturazioneContratti.Common;
+using FatturazioneContratti.Config;
+using FatturazioneContratti.Orders;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using EFCore.BulkExtensions;
-using EFMago.Models;
-using FatturazioneContratti.Common;
-using FatturazioneContratti.Orders;
-using Microsoft.EntityFrameworkCore;
+using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace FatturazioneContratti.Invoicing
 {
@@ -15,8 +17,16 @@ namespace FatturazioneContratti.Invoicing
     {
         private readonly FattureContext _ordiniCntx;
         private readonly int _loginId;
+
+        /// <summary>
+        /// Timestamp unico della fatturazione: Tbcreated/Tbmodified di tutte le entità
+        /// generate condividono lo stesso valore (prima ogni proprietà chiamava DateTime.Now
+        /// separatamente, con millisecondi diversi sulla stessa riga).
+        /// </summary>
+        private readonly DateTime _now = DateTime.Now;
         private const string RegIvaPosticipate = "V2";
         private const string TecnoAll1 = "NOLEGGIO SPA";
+        private const string EstateSicura = "ESTATE";
 
         public ConsuntivoService(FattureContext ordiniCntx, int loginId)
         {
@@ -77,6 +87,19 @@ namespace FatturazioneContratti.Invoicing
             { "5", "SUPPLEMENTAR" }
         };
 
+        private static readonly Dictionary<string, string[]> FilialiMapping = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "TO", new[] { "01" } },
+            { "MI", new[] { "02" } },
+            { "AT", new[] { "03" } },
+            { "AO", new[] { "04" } },
+            { "NO", new[] { "05" } },
+            { "BI", new[] { "08" } },
+            { "VA", new[] { "09" } },
+            { "CN", new[] { "11" } },
+            { "AL", new[] { "12" } }
+        };
+
         public static string TrascodificaServizioAggiuntivo(string tipoEvento) =>
             MappingsEventoIntegra.TryGetValue(tipoEvento ?? string.Empty, out string val) ? val : string.Empty;
 
@@ -92,9 +115,11 @@ namespace FatturazioneContratti.Invoicing
 
         public bool ControllaFlussoIntegra(
             FiltriOrdiniConsuntivo filtri,
-            Action<string> logMessage = null,
+            Action<string, AppConfig.LogTarget> logMessage = null,
             Action<string> updateStatus = null,
-            Action advanceProgress = null)
+            ProgressCallbacks? progress1 = null,
+            ProgressCallbacks? progress2 = null,
+            ProgressCallbacks? progress3 = null)
         {
             var errori = new StringBuilder();
             var fatalContrattoErrorList = new List<string>();
@@ -106,47 +131,69 @@ namespace FatturazioneContratti.Invoicing
             {
                 updateStatus?.Invoke("Estrazione distinte e interventi Integra...");
 
-                var allDistinte = _ordiniCntx.AllordCliContrattoDistinta
+                IQueryable<AllordCliContrattoDistinta> distintaQuery =
+                    _ordiniCntx.AllordCliContrattoDistinta
                     .Include(sa => sa.AllordCliContrattoDistintaServAgg)
-                    .Where(wsa => wsa.Servizio != TecnoAll1)
+                    .Where(wsa => wsa.Servizio != TecnoAll1 && wsa.Servizio != EstateSicura)
                     .Include(o => o.AllordCliContratto)
                         .ThenInclude(ord => ord.SaleOrd)
-                            .ThenInclude(info => info.ALLOrdCliAcc)
+                            .ThenInclude(info => info.ALLOrdCliAcc);                                           
+
+                var allDistinte = distintaQuery
                     .Select(x => new MiniDistinta
                     {
+                        NrOrdine = x.AllordCliContratto.SaleOrd.InternalOrdNo,
+                        Filiale = x.AllordCliContratto.SaleOrd.CostCenter,
+                        Priorita = x.AllordCliContratto.SaleOrd.Priority,
                         CodIntegra = x.CodIntegra,
                         DataCessazione = x.AllordCliContratto.SaleOrd.ALLOrdCliAcc.DataCessazione ?? DomainConstants.DataNulla,
                         DataScadenzaFissa = x.AllordCliContratto.SaleOrd.ALLOrdCliAcc.DataScadenzaFissa ?? DomainConstants.DataNulla,
-                        AllordCliContrattoDistintaServAgg = x.AllordCliContrattoDistintaServAgg
+                        AllordCliContrattoDistintaServAgg = x.AllordCliContrattoDistintaServAgg,
+                        AlltipoRigaServizio = x.AlltipoRigaServizio,
+                        Servizio = x.Servizio
                     })
                     .ToList();
 
                 IQueryable<IntegraInterventi> intQuery = _ordiniCntx.IntegraInterventi.AsQueryable();
 
-                if (filtri.AskFilter)
-                {
-                    if (filtri.Riassegna) intQuery = intQuery.Where(o => o.MAssociato == "0");
-                    intQuery = intQuery.Where(o => o.InizioAllarme.HasValue 
-                        && o.InizioAllarme.Value.Date >= filtri.FromLogDate 
-                        && o.InizioAllarme.Value.Date <= filtri.ToLogDate);
+                // FILTRI
+                if (!filtri.Riassegna) intQuery = intQuery.Where(o => o.MAssociato == "0");
 
-                    if (filtri.SingolaFiliale) intQuery = intQuery.Where(o => o.Filiale == filtri.Filiale);
+                // Filtro data solo se non è NoFilter
+                if (filtri.InterventiFilter != InterventiFilterMode.NoFilter)
+                {
+                    intQuery = intQuery.Where(o => o.InizioAllarme.HasValue 
+                        && o.InizioAllarme.Value.Date >= filtri.FromInterventiDate 
+                        && o.InizioAllarme.Value.Date <= filtri.ToInterventiDate);
                 }
+
+                if (filtri.SingolaFiliale) intQuery = intQuery.Where(o => o.Filiale == filtri.Filiale);
 
                 var allInterventi = intQuery.ToList();
                 if (!allInterventi.Any())
                 {
-                    logMessage?.Invoke("Nessun intervento Integra da controllare.");
+                    logMessage?.Invoke("Nessun intervento Integra da controllare.", AppConfig.LogTarget.Ui);
                     return true;
                 }
 
-                logMessage?.Invoke($"Interventi estratti: {allInterventi.Count}");
+                // Indice per codice contratto: la vecchia Where su lista rieseguiva la scansione
+                // delle distinte per ogni intervento (O(interventi × distinte)).
+                var distintePerCodice = allDistinte.ToLookup(x => x.CodIntegra, StringComparer.OrdinalIgnoreCase);
+
+                logMessage?.Invoke($"Interventi estratti: {allInterventi.Count}", AppConfig.LogTarget.Ui);
+                // inizializzo progress principale
+                progress1?.Init(0, Math.Max(1, allInterventi.Count));
 
                 foreach (var i in allInterventi)
                 {
-                    advanceProgress?.Invoke();
+                    // avanza la progress
+                    progress1?.Advance();
+                    Debug.WriteLine(i.Contratto);
 
-                    var distinteFiltrate = allDistinte.Where(x => string.Equals(x.CodIntegra, i.Contratto, StringComparison.OrdinalIgnoreCase)).ToList();
+                    // Join per codice contratto indicizzato (lookup) + regola di mapping filiale
+                    var distinteFiltrate = distintePerCodice[i.Contratto]
+                        .Where(x => FilialeCorrisponde(x, i))
+                        .ToList();
 
                     if (distinteFiltrate.Count == 1)
                     {
@@ -163,6 +210,8 @@ namespace FatturazioneContratti.Invoicing
                             i.MIdOrdCli = row.IdOrdCli;
                             i.MLineaContratto = row.RifRifLinea;
                             i.MLineaDistinta = row.RifLinea;
+                            i.TBModified = _now;
+                            i.TBModifiedID = (int)AppConfig.LoginId;
                         }
                         else if (allEventi.Count > 1)
                         {
@@ -171,13 +220,19 @@ namespace FatturazioneContratti.Invoicing
                         }
                         else
                         {
-                            string err = $"Contratto {i.Contratto} Evento: {i.TipoEvento}";
+                            string err = $"Contratto {i.Contratto} Evento Assente: {i.TipoEvento}";
                             if (!eventoErrorList.Contains(err)) eventoErrorList.Add(err);
                         }
                     }
                     else if (distinteFiltrate.Count > 1)
                     {
-                        if (!fatalContrattoErrorList.Contains(i.Contratto)) fatalContrattoErrorList.Add(i.Contratto);
+                        // Per ogni distinta filtrata aggiungo alla lista l'entry con contratto + numero ordine
+                        foreach (var d in distinteFiltrate)
+                        {
+                            var entry = $"{i.Contratto} - Ordine {d.NrOrdine}";
+                            if (!fatalContrattoErrorList.Contains(entry))
+                                fatalContrattoErrorList.Add(entry);                            
+                        }
                     }
                     else
                     {
@@ -185,13 +240,52 @@ namespace FatturazioneContratti.Invoicing
                     }
                 }
 
+                // finalize progress
+                progress1?.Finish();
+
                 // Salvataggio aggiornamenti interventi
                 updateStatus?.Invoke("Salvataggio aggiornamenti interventi...");
                 _ordiniCntx.SaveChanges();
 
                 if (fatalContrattoErrorList.Any() || fatalEventoErrorList.Any() || contrattoErrorList.Any() || eventoErrorList.Any())
                 {
-                    logMessage?.Invoke("Riscontrate anomalie o incongruenze nel controllo flusso.");
+                    var dettaglio = new StringBuilder();
+                    dettaglio.AppendLine("Riscontrate anomalie o incongruenze nel controllo flusso.");
+                    logMessage?.Invoke(dettaglio.ToString(), AppConfig.LogTarget.Ui);
+                    dettaglio.AppendLine();
+
+                    if (fatalContrattoErrorList.Any())
+                    {
+                        dettaglio.AppendLine("ERRORE CRITICO - Contratti duplicati:");
+                        foreach (var c in fatalContrattoErrorList) dettaglio.AppendLine($" - {c}");
+                        dettaglio.AppendLine();
+                    }
+
+                    if (fatalEventoErrorList.Any())
+                    {
+                        dettaglio.AppendLine("ERRORE CRITICO - Eventi multipli per contratto:");
+                        foreach (var e in fatalEventoErrorList) dettaglio.AppendLine($" - {e}");
+                        dettaglio.AppendLine();
+                    }
+
+                    if (contrattoErrorList.Any())
+                    {
+                        dettaglio.AppendLine("CONTRATTI NON TROVATI:");
+                        foreach (var c in contrattoErrorList) dettaglio.AppendLine($" - {c}");
+                        dettaglio.AppendLine();
+                    }
+
+                    if (eventoErrorList.Any())
+                    {
+                        dettaglio.AppendLine("EVENTI NON ASSOCIATI:");
+                        foreach (var e in eventoErrorList) dettaglio.AppendLine($" - {e}");
+                        dettaglio.AppendLine();
+                    }
+
+                    dettaglio.AppendLine($"Riepilogo: Contratti duplicati={fatalContrattoErrorList.Count}, Eventi multipli={fatalEventoErrorList.Count}, Contratti mancanti={contrattoErrorList.Count}, Eventi mancanti={eventoErrorList.Count}");
+
+                    // Scrive su UI e su file di log; se preferisci solo UI usa AppConfig.LogTarget.Ui
+                    logMessage?.Invoke(dettaglio.ToString(), AppConfig.LogTarget.File);
                     return false;
                 }
 
@@ -199,7 +293,7 @@ namespace FatturazioneContratti.Invoicing
             }
             catch (Exception ex)
             {
-                logMessage?.Invoke($"Errore durante il controllo del flusso Integra: {ex.Message}");
+                logMessage?.Invoke($"Errore durante il controllo del flusso Integra: {ex.Message}", AppConfig.LogTarget.Ui  );
                 return false;
             }
         }
@@ -207,12 +301,13 @@ namespace FatturazioneContratti.Invoicing
         #endregion
 
         #region Genera Fatture Consuntivo
-
         public bool GeneraFattureConsuntivo(
             FiltriOrdiniConsuntivo filtri,
-            Action<string> logMessage = null,
+            Action<string, AppConfig.LogTarget> logMessage = null,
             Action<string> updateStatus = null,
-            Action advanceProgress = null)
+            ProgressCallbacks? progress1 = null,
+            ProgressCallbacks? progress2 = null,
+            ProgressCallbacks? progress3 = null)
         {
             var bulkMessage = new StringBuilder();
             var errori = new StringBuilder();
@@ -222,22 +317,32 @@ namespace FatturazioneContratti.Invoicing
             {
                 updateStatus?.Invoke("Estrazione ordini corrispondenti per consuntivazione...");
 
-                // Precaricamento tabelle core
-                _ordiniCntx.IntegraInterventi.Load();
-                _ordiniCntx.MaCustSupp.Where(w => w.CustSuppType == 3211264).Load();
-                _ordiniCntx.MaCustSuppBranches.Load();
-                _ordiniCntx.MaCustSuppCustomerOptions.Load();
+                // Precaricamento tabelle core.
+                // NOTA: MaCustSupp NON va precaricato con .Load(): la lista "clienti" qui sotto
+                // ha già l'Include di MaCustSuppCustomerOptions e la tabella veniva caricata due volte.
+                //_ordiniCntx.IntegraInterventi.Load();
+                //_ordiniCntx.MaCustSuppBranches.Load();
+                //_ordiniCntx.MaCustSuppCustomerOptions.Load();
 
                 IQueryable<IntegraInterventi> intFiltrati = _ordiniCntx.IntegraInterventi
                     .Where(w => w.AllordCliContrattoDistinta != null && w.AllordCliContrattoDistinta.Servizio != TecnoAll1);
 
-                if (filtri.AskFilter && filtri.SingolaFiliale)
+                // Filtro data solo se non è NoFilter
+                if (filtri.InterventiFilter != InterventiFilterMode.NoFilter)
+                {
+                    intFiltrati = intFiltrati.Where(o => o.InizioAllarme.HasValue 
+                        && o.InizioAllarme.Value.Date >= filtri.FromInterventiDate 
+                        && o.InizioAllarme.Value.Date <= filtri.ToInterventiDate);
+                }
+
+                if (filtri.SingolaFiliale)
                 {
                     intFiltrati = intFiltrati.Where(o => o.Filiale == filtri.Filiale);
                 }
 
                 var interventiList = intFiltrati.ToList();
-                int[] aOrdini = intFiltrati.Select(s => s.MIdOrdCli ?? 0).Where(id => id > 0).Distinct().ToArray();
+                // Gli ID si ricavano dalla lista già materializzata: la query non va eseguita due volte.
+                int[] aOrdini = interventiList.Select(s => s.MIdOrdCli ?? 0).Where(id => id > 0).Distinct().ToArray();
 
                 var ordiniList = _ordiniCntx.MaSaleOrd
                     .Include(o => o.ALLordCliContratto)
@@ -259,6 +364,9 @@ namespace FatturazioneContratti.Invoicing
                     .ThenBy(o => o.Carrier1)
                     .ToList();
 
+                // inizializzo progress principale per gli ordini
+                progress1?.Init(0, Math.Max(1, ordiniList.Count));
+
                 var paramSaleOrd = _ordiniCntx.MaSalesOrdParameters.FirstOrDefault() ?? new MaSalesOrdParameters();
 
                 // Collection per il Bulk Insert delle fatture
@@ -276,7 +384,13 @@ namespace FatturazioneContratti.Invoicing
                 string sDefCodIva = defIva?.TaxCode ?? string.Empty;
                 double dDefPercIva = Math.Round((double)(codiciIva.FirstOrDefault(tax => tax.TaxCode == sDefCodIva)?.Perc ?? 0), DomainConstants.DecimaliPercentuale);
 
-                var idNumbers = _ordiniCntx.MaIdnumbers.First(k => k.CodeType == (int)IdType.DocVend);
+                var idNumbers = _ordiniCntx.MaIdnumbers.FirstOrDefault(k => k.CodeType == (int)IdType.DocVend);
+                if (idNumbers == null)
+                {
+                    logMessage?.Invoke("Contatore MA_IdNumbers per i documenti di vendita non trovato: impossibile generare le fatture.", AppConfig.LogTarget.Ui);
+                    return false;
+                }
+
                 int saleDocId = idNumbers.LastId ?? 0;
 
                 var clienti = _ordiniCntx.MaCustSupp
@@ -284,29 +398,35 @@ namespace FatturazioneContratti.Invoicing
                     .Where(w => w.CustSuppType == 3211264)
                     .ToList();
 
+                // Buffer righe dell'ordine corrente: l'ID fattura viene assegnato solo quando il
+                // gruppo produce almeno una riga, così i gruppi senza interventi fatturabili non
+                // scrivono teste fattura vuote né cross-reference orfani (il vecchio flusso scriveva
+                // la testa al primo ordine del gruppo a prescindere da isNewRows).
                 var cFattura = new CurFatt();
                 var saleDoc = new MaSaleDoc();
-                bool scriviTesta = true;
+                bool testaDaScrivere = true;
 
                 foreach (var o in ordiniList)
                 {
-                    advanceProgress?.Invoke();
+                    // avanza la progress
+                    progress1?.Advance();
+
                     debugging.AppendLine($"Ordine: {o.InternalOrdNo} Cliente: {o.Customer}");
 
                     // Criteri di Rottura e accorpamento fattura
                     if (Break(o, saleDoc, cFattura.Cliente, paramSaleOrd))
                     {
-                        scriviTesta = true;
-                        cFattura = new CurFatt(o);
-                        saleDocId++;
-                        cFattura.SaleDocId = saleDocId;
-                        cFattura.Cliente = clienti.FirstOrDefault(w => w.CustSupp == o.InvoicingCustomer);
-                        cFattura.DataFattura = filtri.DataFattura;
+                        cFattura = new CurFatt(o)
+                        {
+                            Cliente = clienti.FirstOrDefault(w => w.CustSupp == o.InvoicingCustomer),
+                            DataFattura = filtri.DataFattura
+                        };
                         if ((cFattura.PercIva ?? 0) == 0) cFattura.PercIva = dDefPercIva;
+                        testaDaScrivere = true;
                     }
 
                     int iNewRowsCount = 0;
-                    bool isNewRows = false;
+                    var righeOrdine = new List<MaSaleDocDetail>();
                     bool bWritedHeadDescription = false;
 
                     if (o.ALLordCliContratto != null)
@@ -327,8 +447,8 @@ namespace FatturazioneContratti.Invoicing
 
                                     if (interventiEvento.Any())
                                     {
-                                        s.AnnoIntervento = filtri.ToLogDate.Year;
-                                        var toDataMese = new DateTime(filtri.ToLogDate.Year, filtri.ToLogDate.Month, DateTime.DaysInMonth(filtri.ToLogDate.Year, filtri.ToLogDate.Month), 23, 59, 59);
+                                        s.AnnoIntervento = filtri.ToInterventiDate.Year;
+                                        var toDataMese = new DateTime(filtri.ToInterventiDate.Year, filtri.ToInterventiDate.Month, DateTime.DaysInMonth(filtri.ToInterventiDate.Year, filtri.ToInterventiDate.Month), 23, 59, 59);
                                         var fromDataMese = new DateTime(toDataMese.Year, toDataMese.Month, 1);
 
                                         s.NrInterventiMese = interventiEvento
@@ -357,8 +477,6 @@ namespace FatturazioneContratti.Invoicing
 
                                     if ((s.NrInterventiOltreFranchigia ?? 0) > 0 && (o.ALLOrdCliAcc?.DataCessazione ?? DomainConstants.DataNulla) != DomainConstants.DataNulla)
                                     {
-                                        isNewRows = true;
-
                                         var cFattRow = new CurFattRow
                                         {
                                             Contropartita = string.IsNullOrWhiteSpace(s.MaItems?.SaleOffset) ? sDefContropartita : s.MaItems.SaleOffset,
@@ -377,14 +495,14 @@ namespace FatturazioneContratti.Invoicing
                                         {
                                             bWritedHeadDescription = true;
                                             iNewRowsCount++;
-                                            efMaSaleDocDetails.Add(CreaRigaDescrittivaFattura(iNewRowsCount, cFattura, "INTERVENTI SUPPLEMENTARI"));
+                                            righeOrdine.Add(CreaRigaDescrittivaFattura(iNewRowsCount, cFattura, "INTERVENTI SUPPLEMENTARI"));
 
                                             if (o.ALLordCliDescrizioni != null)
                                             {
                                                 foreach (var dTesta in o.ALLordCliDescrizioni)
                                                 {
                                                     iNewRowsCount++;
-                                                    efMaSaleDocDetails.Add(CreaRigaDescrittivaFattura(iNewRowsCount, cFattura, dTesta.Descrizione));
+                                                    righeOrdine.Add(CreaRigaDescrittivaFattura(iNewRowsCount, cFattura, dTesta.Descrizione));
                                                 }
                                             }
                                         }
@@ -395,7 +513,7 @@ namespace FatturazioneContratti.Invoicing
                                             foreach (var dRiga in c.AllordCliContrattoDescFatt)
                                             {
                                                 iNewRowsCount++;
-                                                efMaSaleDocDetails.Add(CreaRigaDescrittivaFattura(iNewRowsCount, cFattura, dRiga.Descrizione));
+                                                righeOrdine.Add(CreaRigaDescrittivaFattura(iNewRowsCount, cFattura, dRiga.Descrizione));
                                             }
                                         }
 
@@ -435,118 +553,133 @@ namespace FatturazioneContratti.Invoicing
                                             CostCenter = cFattRow.CdC,
                                             Offset = cFattRow.Contropartita,
                                             TaxCode = cFattRow.CodIva,
-                                            Tbcreated = DateTime.Now,
-                                            Tbmodified = DateTime.Now,
+                                            Tbcreated = _now,
+                                            Tbmodified = _now,
                                             TbcreatedId = _loginId,
                                             TbmodifiedId = _loginId
                                         };
-                                        efMaSaleDocDetails.Add(r);
+                                        righeOrdine.Add(r);
                                     }
                                 }
                             }
                         }
                     }
 
-                    if (isNewRows)
+                    if (righeOrdine.Count > 0)
                     {
+                        // Prima riga utile del gruppo: assegna l'ID documento (e solo ora
+                        // consuma il numeratore, cosi' i gruppi senza righe non lasciano buchi).
+                        if (cFattura.SaleDocId == 0)
+                            cFattura.SaleDocId = ++saleDocId;
+
+                        // Le righe erano state create con SaleDocId provvisorio: allinealo
+                        // all'ID effettivo prima di accodarle.
+                        foreach (var riga in righeOrdine)
+                            riga.SaleDocId = cFattura.SaleDocId;
+
+                        efMaSaleDocDetails.AddRange(righeOrdine);
+
                         cFattura.LastLine = (cFattura.LastLine ?? 0) + iNewRowsCount;
                         cFattura.LastSubId = (cFattura.LastSubId ?? 0) + iNewRowsCount;
-                    }
 
-                    if (scriviTesta)
-                    {
-                        saleDoc = new MaSaleDoc
+                        if (testaDaScrivere)
                         {
-                            SaleDocId = cFattura.SaleDocId,
-                            DocumentType = (int)DocumentType.Fattura,
-                            AccTpl = (cFattura.Cliente?.CustSuppKind == (int)CustSuppKind.Nazionale) ? defVendite.InvoiceAccTpl : defVendite.EuinvoiceAccTpl,
-                            CustSupp = cFattura.CodCliente,
-                            CustSuppType = 3211264,
-                            DocumentDate = cFattura.DataFattura,
-                            InstallmStartDate = cFattura.DataFattura,
-                            PostingDate = cFattura.DataFattura,
-                            TaxJournal = RegIvaPosticipate,
-                            CustomerBank = cFattura.Cliente?.CustSuppBank,
-                            CompanyCa = cFattura.Cliente?.CompanyCa,
-                            CompanyPymtCa = cFattura.Cliente?.CustomerCompanyCa,
-                            CompanyBank = cFattura.Cliente?.CompanyBank,
-                            InvoiceFollows = "0",
-                            EidocumentType = 22151169, // TD01
-                            Area = cFattura.Area,
-                            AreaManager = cFattura.AreaManager,
-                            Salesperson = cFattura.SalesPerson,
-                            AccrualPercAtInvoiceDate = 100,
-                            Issued = "0",
-                            DeliveryTerms = 5963782,
-                            CountryOfDestination = "IT",
-                            CountryOfPayment = "IT",
-                            DepartureDate = cFattura.DataFattura,
-                            Presentation = 1376260,
-                            ValueDate = cFattura.DataFattura,
-                            IntrastatAccrualDate = cFattura.DataFattura,
-                            IntrastatBis = "1",
-                            ActionOnLifoFifo = 26411008,
-                            ModifyOriginalPymtSched = "0",
-                            Tbguid = Guid.NewGuid(),
-                            Payment = cFattura.Pagamento,
-                            Currency = "EUR",
-                            SplitPaymentActive = "0",
-                            Tbcreated = DateTime.Now,
-                            Tbmodified = DateTime.Now,
-                            TbcreatedId = _loginId,
-                            TbmodifiedId = _loginId,
-                            WorkerIdissue = _loginId
-                        };
-                        efMaSaleDoc.Add(saleDoc);
-                        scriviTesta = false;
-                    }
+                            saleDoc = new MaSaleDoc
+                            {
+                                SaleDocId = cFattura.SaleDocId,
+                                DocumentType = (int)DocumentType.Fattura,
+                                AccTpl = (cFattura.Cliente?.CustSuppKind == (int)CustSuppKind.Nazionale) ? defVendite.InvoiceAccTpl : defVendite.EuinvoiceAccTpl,
+                                CustSupp = cFattura.CodCliente,
+                                CustSuppType = 3211264,
+                                DocumentDate = cFattura.DataFattura,
+                                InstallmStartDate = cFattura.DataFattura,
+                                PostingDate = cFattura.DataFattura,
+                                TaxJournal = RegIvaPosticipate,
+                                CustomerBank = cFattura.Cliente?.CustSuppBank,
+                                CompanyCa = cFattura.Cliente?.CompanyCa,
+                                CompanyPymtCa = cFattura.Cliente?.CustomerCompanyCa,
+                                CompanyBank = cFattura.Cliente?.CompanyBank,
+                                InvoiceFollows = "0",
+                                EidocumentType = 22151169, // TD01
+                                Area = cFattura.Area,
+                                AreaManager = cFattura.AreaManager,
+                                Salesperson = cFattura.SalesPerson,
+                                AccrualPercAtInvoiceDate = 100,
+                                Issued = "0",
+                                DeliveryTerms = 5963782,
+                                CountryOfDestination = "IT",
+                                CountryOfPayment = "IT",
+                                DepartureDate = cFattura.DataFattura,
+                                Presentation = 1376260,
+                                ValueDate = cFattura.DataFattura,
+                                IntrastatAccrualDate = cFattura.DataFattura,
+                                IntrastatBis = "1",
+                                ActionOnLifoFifo = 26411008,
+                                ModifyOriginalPymtSched = "0",
+                                Tbguid = Guid.NewGuid(),
+                                Payment = cFattura.Pagamento,
+                                Currency = "EUR",
+                                SplitPaymentActive = "0",
+                                Tbcreated = _now,
+                                Tbmodified = _now,
+                                TbcreatedId = _loginId,
+                                TbmodifiedId = _loginId,
+                                WorkerIdissue = _loginId
+                            };
+                            efMaSaleDoc.Add(saleDoc);
+                            testaDaScrivere = false;
+                        }
 
-                    // Riferimenti incrociati
-                    efMaCrossReferences.Add(CreaCrossReference(o.SaleOrdId, saleDocId));
-                    efMaCrossReferencesNotes.Add(CreaCrossReferenceNotes(o.SaleOrdId, saleDocId, string.Empty));
+                        // Riferimenti incrociati
+                        efMaCrossReferences.Add(CreaCrossReference(o.SaleOrdId, cFattura.SaleDocId));
+                        efMaCrossReferencesNotes.Add(CreaCrossReferenceNotes(o.SaleOrdId, cFattura.SaleDocId, string.Empty));
 
-                    // Ritenuta d'acconto
-                    if (cFattura.Cliente?.MaCustSuppCustomerOptions?.WithholdingTaxManagement == "1")
-                    {
-                        var opt = cFattura.Cliente.MaCustSuppCustomerOptions;
-                        efMaSaleDocSummary.Add(new MaSaleDocSummary
+                        // Ritenuta d'acconto
+                        if (cFattura.Cliente?.MaCustSuppCustomerOptions?.WithholdingTaxManagement == "1")
                         {
-                            SaleDocId = cFattura.SaleDocId,
-                            WithholdingTaxManagement = "1",
-                            WithholdingTax = 0,
-                            WithholdingTaxPerc = opt.WithholdingTaxPerc,
-                            WithholdingTaxBasePerc = opt.WithholdingTaxBasePerc,
-                            Tbcreated = DateTime.Now,
-                            Tbmodified = DateTime.Now,
-                            TbcreatedId = _loginId,
-                            TbmodifiedId = _loginId
-                        });
+                            var opt = cFattura.Cliente.MaCustSuppCustomerOptions;
+                            efMaSaleDocSummary.Add(new MaSaleDocSummary
+                            {
+                                SaleDocId = cFattura.SaleDocId,
+                                WithholdingTaxManagement = "1",
+                                WithholdingTax = 0,
+                                WithholdingTaxPerc = opt.WithholdingTaxPerc,
+                                WithholdingTaxBasePerc = opt.WithholdingTaxBasePerc,
+                                Tbcreated = _now,
+                                Tbmodified = _now,
+                                TbcreatedId = _loginId,
+                                TbmodifiedId = _loginId
+                            });
 
-                        int causaleId = CausaliPagamentoFatturaElettronica.TryGetValue(cFattura.LetteraCausalePagamento ?? string.Empty, out int cId) 
-                            ? cId 
-                            : 32440347;
+                            int causaleId = CausaliPagamentoFatturaElettronica.TryGetValue(cFattura.LetteraCausalePagamento ?? string.Empty, out int cId)
+                                ? cId
+                                : 32440347;
 
-                        efMaEiItdocAdditionalData.Add(new MaEiItdocAdditionalData
-                        {
-                            DocId = cFattura.SaleDocId,
-                            DocSubId = 0,
-                            Line = 0,
-                            SubLine = 0,
-                            FieldName = "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiGeneraliDocumento.DatiRitenuta.CausalePagamento",
-                            FieldValue = causaleId.ToString(),
-                            Tbcreated = DateTime.Now,
-                            Tbmodified = DateTime.Now,
-                            TbcreatedId = _loginId,
-                            TbmodifiedId = _loginId
-                        });
+                            efMaEiItdocAdditionalData.Add(new MaEiItdocAdditionalData
+                            {
+                                DocId = cFattura.SaleDocId,
+                                DocSubId = 0,
+                                Line = 0,
+                                SubLine = 0,
+                                FieldName = "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiGeneraliDocumento.DatiRitenuta.CausalePagamento",
+                                FieldValue = causaleId.ToString(),
+                                Tbcreated = _now,
+                                Tbmodified = _now,
+                                TbcreatedId = _loginId,
+                                TbmodifiedId = _loginId
+                            });
+                        }
                     }
                 }
 
-                // Aggiornamento LastSubId
+                // Aggiornamento LastSubId (conteggio raggruppato: il Count dentro il foreach
+                // era O(fatture x righe))
+                var righePerFattura = efMaSaleDocDetails
+                    .GroupBy(d => d.SaleDocId)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
                 foreach (var f in efMaSaleDoc)
-                {
-                    f.LastSubId = efMaSaleDocDetails.Count(d => d.SaleDocId == f.SaleDocId);
-                }
+                    f.LastSubId = righePerFattura.TryGetValue(f.SaleDocId, out int nRigheFattura) ? nRigheFattura : 0;
 
                 // Bulk Insert transazionale
                 if (efMaSaleDoc.Any())
@@ -567,14 +700,14 @@ namespace FatturazioneContratti.Invoicing
 
                     if (!esito) return false;
 
-                    logMessage?.Invoke($"Fatture generate con successo: {efMaSaleDoc.Count}");
+                    logMessage?.Invoke($"Fatture generate con successo: {efMaSaleDoc.Count}", AppConfig.LogTarget.Ui);
                 }
 
                 return true;
             }
             catch (Exception ex)
             {
-                logMessage?.Invoke($"Errore generale nella procedura Consuntivi: {ex.Message}");
+                logMessage?.Invoke($"Errore in GeneraFattureConsuntivo: {ex.Message}", AppConfig.LogTarget.Ui);
                 return false;
             }
         }
@@ -583,7 +716,7 @@ namespace FatturazioneContratti.Invoicing
 
         #region Helper Interni
 
-        private static MaSaleDocDetail CreaRigaDescrittivaFattura(int iNewRowsCount, CurFatt cFattura, string descrizione)
+        private MaSaleDocDetail CreaRigaDescrittivaFattura(int iNewRowsCount, CurFatt cFattura, string descrizione)
         {
             return new MaSaleDocDetail
             {
@@ -598,10 +731,10 @@ namespace FatturazioneContratti.Invoicing
                 CustSupp = cFattura.CodCliente,
                 CustSuppType = 3211264,
                 DepartureDate = cFattura.DataFattura,
-                Tbcreated = DateTime.Now,
-                Tbmodified = DateTime.Now,
-                TbcreatedId = 0,
-                TbmodifiedId = 0,
+                Tbcreated = _now,
+                Tbmodified = _now,
+                TbcreatedId = _loginId,
+                TbmodifiedId = _loginId,
                 Item = string.Empty,
                 UoM = string.Empty,
                 Qty = 0,
@@ -651,6 +784,23 @@ namespace FatturazioneContratti.Invoicing
                 TbcreatedId = _loginId,
                 TbmodifiedId = _loginId
             };
+        }
+
+        /// <summary>
+        /// Verifica la corrispondenza filiale tra distinta e intervento.
+        /// x.Filiale è il CostCenter letterale (es. "NO","MI");
+        /// i.Filiale è il codice numerico memorizzato su IntegraInterventi (es. "05","08").
+        /// </summary>
+        private static bool FilialeCorrisponde(MiniDistinta distinta, IntegraInterventi intervento)
+        {
+            if (string.IsNullOrWhiteSpace(distinta.Filiale) || string.IsNullOrWhiteSpace(intervento.Filiale))
+                return false;
+
+            if (FilialiMapping.TryGetValue(distinta.Filiale.Trim(), out var codici))
+                return codici.Any(c => string.Equals(c, intervento.Filiale.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            // fallback: se non esiste mapping, confronta direttamente (gestione edge-case)
+            return string.Equals(distinta.Filiale.Trim(), intervento.Filiale.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         public static bool Break(MaSaleOrd ordine, MaSaleDoc testaFattura, MaCustSupp customer, MaSalesOrdParameters param)
@@ -722,12 +872,18 @@ namespace FatturazioneContratti.Invoicing
             };
         }
 
+
         private class MiniDistinta
         {
+            public string NrOrdine { get; set; }
+            public string Filiale { get; set; }
+            public short? Priorita { get; set; }   // <-- aggiunta
             public string CodIntegra { get; set; }
             public DateTime DataCessazione { get; set; }
             public DateTime DataScadenzaFissa { get; set; }
             public ICollection<AllordCliContrattoDistintaServAgg> AllordCliContrattoDistintaServAgg { get; set; }
+            public AlltipoRigaServizio AlltipoRigaServizio { get; set; }
+            public String Servizio { get; set; }
         }
 
         #endregion
