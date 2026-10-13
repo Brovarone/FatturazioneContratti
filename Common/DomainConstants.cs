@@ -1,6 +1,6 @@
 using System;
 
-namespace FatturazioneContratti.Orders
+namespace FatturazioneContratti.Common
 {
     /// <summary>
     /// Porting delle costanti sparse in Ordini.vb (decPerc/decValUnit/decTax) e in

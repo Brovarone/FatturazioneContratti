@@ -1,13 +1,14 @@
-﻿using System;
+﻿using EFCore.BulkExtensions;
+using FatturazioneContratti.Config;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using EFCore.BulkExtensions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace FatturazioneContratti.Common
 {
@@ -23,7 +24,7 @@ namespace FatturazioneContratti.Common
         public static bool ExecuteInBulkTransaction(
             DbContext context,
             Action executeActions,
-            Action<string> logMessage = null,
+            Action<string, AppConfig.LogTarget> logMessage = null,
             StringBuilder logBuilder = null)
         {
             using var bulkTrans = context.Database.BeginTransaction();
@@ -44,8 +45,8 @@ namespace FatturazioneContratti.Common
                 try { bulkTrans.Rollback(); } catch (Exception rbEx) { Debug.WriteLine($"[Rollback Fallito]: {rbEx.Message}"); }
 
                 logBuilder?.AppendLine($"[Bulk Transaction Error]: {ex.Message}");
-                logBuilder?.AppendLine(ex.StackTrace);
-                logMessage?.Invoke($"Rollback eseguito a causa di un errore: {ex.Message}");
+                logBuilder?.AppendLine(ex.StackTrace);  
+                logMessage?.Invoke($"Rollback eseguito a causa di un errore: {ex.Message}", AppConfig.LogTarget.Ui);
                 return false;
             }
             finally
@@ -71,7 +72,7 @@ namespace FatturazioneContratti.Common
         /// Esegue la bulk operation in UNA sola chiamata.
         ///
         /// - Insert: prima di scrivere, ogni proprietà "non passata" (valore = default CLR) che nel
-        ///   modello ha un DEFAULT riceve quel default (vedi DbDefaults). Nessuna esclusione di colonne,
+        ///   modello ha un DEFAULT riceve quel default (vedi FattureContextExtensions.AddNew). Nessuna esclusione di colonne,
         ///   nessun raggruppamento: tutte le righe hanno sempre tutte le colonne valorizzate.
         /// - Update / InsertOrUpdate: le entità vengono scritte così come sono. I default NON vengono
         ///   applicati, perché sovrascriverebbero valori reali che per caso valgono 0 / null.
