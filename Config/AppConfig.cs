@@ -28,6 +28,17 @@ namespace FatturazioneContratti.Config
         public static string LastLogPath { get; set; } = "";
         public static string PathPaghe { get; set; } = "";
 
+        /// <summary>Ultimo errore di lettura della configurazione (null se l'ultimo Load è andato a buon fine).</summary>
+        public static string? LastLoadError { get; private set; }
+        
+        public enum LogTarget
+        {
+            Ui = 0,
+            File = 1,
+            Both = 2
+        }
+        public static LogTarget LogMode { get; set; } = LogTarget.Ui;
+
         // Proprietà dinamica che restituisce il DB corretto in base ai radio/check
         public static string DatabaseInUse
         {
@@ -57,6 +68,8 @@ namespace FatturazioneContratti.Config
         {
             try
             {
+                LastLoadError = null;
+
                 if (!File.Exists(FilePath))
                 {
                     Save(); // Crea il file iniziale se non esiste
@@ -84,11 +97,15 @@ namespace FatturazioneContratti.Config
                     Path = data.Path ?? Path;
                     FoxPath = data.FoxPath ?? FoxPath;
                     LastLogPath = data.LastLogPath ?? LastLogPath;
+                    PathPaghe = data.PathPaghe ?? PathPaghe;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Gestione fallback / default
+                // Traccia il problema: senza questo una configurazione illeggibile passava silenziosamente
+                // e l'app partiva con valori vuoti, scoprendo l'errore solo al primo accesso al DB.
+                LastLoadError = $"Impossibile leggere il file di configurazione '{FilePath}': {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"[AppConfig.Load] {LastLoadError}");
             }
         }
 
@@ -112,7 +129,8 @@ namespace FatturazioneContratti.Config
                     TmpDatabaseSpa = TmpDatabaseSpa,
                     Path = Path,
                     FoxPath = FoxPath,
-                    LastLogPath = LastLogPath
+                    LastLogPath = LastLogPath,
+                    PathPaghe = PathPaghe
                 };
 
                 if (!Directory.Exists(FolderPath))
@@ -145,6 +163,7 @@ namespace FatturazioneContratti.Config
             public string Path { get; set; }
             public string FoxPath { get; set; }
             public string LastLogPath { get; set; }
+            public string PathPaghe { get; set; }
         }
         // UTILITY
         public static void ApriFileJson()
@@ -173,14 +192,31 @@ namespace FatturazioneContratti.Config
 
         public static void ApriCartellaLog()
         {
-            if (!string.IsNullOrWhiteSpace(LastLogPath) && Directory.Exists(LastLogPath))
+            // fallback alla cartella Logs nell'AppData se LastLogPath non è impostato
+            string logsDir = !string.IsNullOrWhiteSpace(LastLogPath)
+                ? LastLogPath
+                : System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Brovarone Cristiano",
+                    "Logs");
+
+            try
             {
+                // crea la cartella se non esiste, così il menu funziona anche dopo cancellazioni accidentali
+                if (!Directory.Exists(logsDir))
+                    Directory.CreateDirectory(logsDir);
+
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
-                    FileName = LastLogPath,
+                    FileName = logsDir,
                     UseShellExecute = true
                 });
             }
+            catch
+            {
+                // Manteniamo comportamento silenzioso qui; se vuoi feedback UI sposta la MessageBox nel caller
+            }
         }
+
     }
 }
