@@ -18,6 +18,13 @@ namespace FatturazioneContratti.Orders
         private readonly FattureContext _context;
         private readonly int _loginId;
 
+        /// <summary>
+        /// Timestamp unico dell'intera operazione: tutti i Tbcreated/Tbmodified/DataFineElaborazione
+        /// scritti durante il workflow usano lo stesso valore, così le righe di una stessa
+        /// elaborazione risultano coerenti (prima ogni proprietà chiamava DateTime.Now separatamente).
+        /// </summary>
+        private readonly DateTime _now = DateTime.Now;
+
         public OrderGenerationService(FattureContext context, int loginId)
         {
             _context = context;
@@ -27,7 +34,7 @@ namespace FatturazioneContratti.Orders
         public bool GeneraRigheOrdine(
             FiltriOrdini filtri,
             int dimensioneBlocco = 100,
-            Action<string> logMessage = null,
+            Action<string, AppConfig.LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
             ProgressCallbacks? progress2 = null,
@@ -44,9 +51,6 @@ namespace FatturazioneContratti.Orders
 
             try
             {
-                //updateStatus?.Invoke("Precaricamento Tabelle");
-                //PrecaricaTabelleOrdini();
-
                 updateStatus?.Invoke("Estrazione preliminare delle chiavi primarie...");
 
                 // -------------------------------------------------------------------------
@@ -86,14 +90,14 @@ namespace FatturazioneContratti.Orders
                 //var allOrdersExplosion = query.ToList(); // <- posso ottenere subito l'esplosione
                 if (!allOrderIds.Any())
                 {
-                    logMessage?.Invoke("Nessun ordine estratto con i filtri specificati.");
+                    logMessage?.Invoke("Nessun ordine estratto con i filtri specificati.", AppConfig.LogTarget.Ui);
                     return true;
                 }
 
                 totOrdini = allOrderIds.Count;
                 string msgTot = $"Trovati {totOrdini} ordini da elaborare"; // in blocchi da {dimensioneBlocco}.";
                 Debug.WriteLine(msgTot);
-                logMessage?.Invoke(msgTot);
+                logMessage?.Invoke(msgTot, AppConfig.LogTarget.Ui);
                 updateStatus?.Invoke(msgTot);
 
                 // Default vendite e IVA
@@ -116,7 +120,6 @@ namespace FatturazioneContratti.Orders
                 // 1. INIZIALIZZAZIONE PROTOTIPI (Fuori dal ciclo, una volta sola!)
                 // L'AddNew estrae i default Fluent dal contesto e ti dà un oggetto perfetto
                 var protoMaSaleOrdDetails = _context.AddNew<MaSaleOrdDetails>();
-                var protoAllordCliAttivita = _context.AddNew<AllordCliAttivita>();
 
 
                 // -------------------------------------------------------------------------
@@ -134,8 +137,13 @@ namespace FatturazioneContratti.Orders
                     updateStatus?.Invoke($"Elaborazione blocco {i / dimensioneBlocco + 1} (Ordini {i + 1} - {Math.Min(i + dimensioneBlocco, totOrdini)} di {totOrdini})...");
                     int[] blocId = allOrderIds.Skip(i).Take(blockSize).ToArray();
                     // Chiamo il loader che gestisce la query con gli id
-                    if (AppConfig.IsDebugging) logMessage?.Invoke("[DEBUG ATTIVO] Avvio forzato della scansione ordine per ordine...");
-                    var allOrdersChunk = LoadOrdersChunkByOrIn(_context, blocId, AppConfig.IsDebugging, logMessage);
+                    if (AppConfig.IsDebugging) logMessage?.Invoke("[DEBUG ATTIVO] Avvio forzato della scansione ordine per ordine...", AppConfig.LogTarget.Ui);
+                    var allOrdersChunk = LoadOrdersChunkByOrIn(
+                        _context,
+                        blocId,
+                        AppConfig.IsDebugging,
+                        msg => logMessage?.Invoke(msg, AppConfig.LogTarget.Ui)
+                    );
 
                     // Ciclo Ordini                    
                     foreach (var o in allOrdersChunk)
@@ -277,8 +285,8 @@ namespace FatturazioneContratti.Orders
                                         avvisi.AppendLine($"Ordine {cOrd.OrdNo} Servizio {cOrdRow.Item} con data prossima fatturazione antecedente alla data di fine estrazione!");
 
                                     c.DataProssimaFatt = cOrdRow.IsCampagna ? cOrdRow.DataProssimaFatturaCampagna : cOrdRow.DataProssimaFattura;
-                                    c.DataFineElaborazione = DateTime.Now;
-                                    c.Tbmodified = DateTime.Now;
+                                    c.DataFineElaborazione = _now;
+                                    c.Tbmodified = _now;
                                     c.TbmodifiedId = _loginId;
                                     updateAllordCliContratto.Add(c);
                                     isUpdateRows = true;
@@ -292,7 +300,7 @@ namespace FatturazioneContratti.Orders
                             o.Delivered = "0";
                             o.Picked = "0";
                             o.LastSubId = cOrd.LastSubId + iNewRowsCount;
-                            o.Tbmodified = DateTime.Now;
+                            o.Tbmodified = _now;
                             o.TbmodifiedId = _loginId;
                             updateMaSaleOrd.Add(o);
                             totOrdiniConNuoveRighe++;
@@ -307,7 +315,7 @@ namespace FatturazioneContratti.Orders
                 progress1?.Finish();
 
                 // Salvataggio Bulk
-                logMessage?.Invoke("Salvataggio su database ERP...");
+                logMessage?.Invoke("Salvataggio su database ERP...", AppConfig.LogTarget.Ui);
                 EseguiSalvataggioTransazionale(
                     updateMaSaleOrd.Count,
                     updateAllordCliContratto.Count,
@@ -319,14 +327,14 @@ namespace FatturazioneContratti.Orders
                     bulkMessage,
                     errori,
                     logMessage);
-                logMessage?.Invoke("[COMPLETATO] Elaborazione a blocchi di ID conclusa con successo.");
+                logMessage?.Invoke("[COMPLETATO] Elaborazione a blocchi di ID conclusa con successo.", AppConfig.LogTarget.Ui);
             }
             catch (Exception ex)
             {
                 Debug.WriteLine(ex.Message);
                 errori.AppendLine($"[Procedura] Messaggio: {ex.Message}");
                 errori.AppendLine($"[Procedura] Stack: {ex.StackTrace}");
-                logMessage?.Invoke($"ERRORE: {ex.Message}");
+                logMessage?.Invoke($"ERRORE: {ex.Message}", AppConfig.LogTarget.Ui);
                 return false;
             }
 
@@ -370,6 +378,10 @@ namespace FatturazioneContratti.Orders
                     .Include(o => o.ALLordCliContratto)
                         .ThenInclude(c => c.AllordCliAttivita)
                             .ThenInclude(a => a.Allattivita)
+                    // Attività collegate direttamente alla testa: servono al workflow ISTAT
+                    // (curLastLineAtt su AllordCliAttivita) e sono nel grafo previsto dal caricamento a blocchi.
+                    .Include(o => o.AllordCliAttivita)
+                        .ThenInclude(a => a.Allattivita)
                     // opzionale: evita query singola troppo pesante
                     .AsSplitQuery();
             }
@@ -407,9 +419,11 @@ namespace FatturazioneContratti.Orders
             }
 
             catch (Exception ex) when (ex is System.Data.SqlTypes.SqlNullValueException ||
-                               ex.InnerException is System.Data.SqlTypes.SqlNullValueException ||
-                               ex.Message.Contains("Null") || ex.InnerException?.Message.Contains("Null") == true)
+                               ex.InnerException is System.Data.SqlTypes.SqlNullValueException)
             {
+                // Solo il NULL non mappato innesca la diagnostica: i vecchi confronti sul testo
+                // dell'eccezione ("Null") catturavano anche errori diversi e attivavano la
+                // scansione atomica a sproposito.
                 // Se non eravamo in modalità debug ma intercettiamo il crash del record NULL, attiviamo la diagnostica
                 logMessage?.Invoke("!!! [CRASH RILEVATO] Rilevata anomalia SqlNullValueException nel blocco. Attivazione isolamento...");
                 EseguiScansioneDiagnostica(context, ids, QueryBase, logMessage);
@@ -461,24 +475,6 @@ namespace FatturazioneContratti.Orders
                     throw new Exception($"Elaborazione interrotta. Trovato record orfano/nullo su SaleOrdId: {singoloId}.", exAtomica);
                 }
             }
-        }
-
-        private void PrecaricaTabelleOrdini()
-        {
-            _context.Allattivita.Load();
-            _context.MaItems.Load();
-            _context.AlltipoRigaServizio.Load();
-            _context.Alldescrizioni.Load();
-            _context.MaSaleOrd.Load();
-            _context.AllordCliAcc.Load();
-            _context.AllordCliFattEle.Load();
-            _context.AllordCliDescrizioni.Load();
-            _context.MaSaleOrdDetails.Load();
-            _context.AllordCliContratto.Load();
-            _context.AllordCliContrattoDescFatt.Load();
-            _context.AllordCliAttivita.Load();
-            _context.AllordCliContrattoDistinta.Load();
-            _context.AllordCliContrattoDistintaServAgg.Load();
         }
 
         private bool VerificaEsclusioneContratto(
@@ -564,7 +560,7 @@ namespace FatturazioneContratti.Orders
                             cOrdRow.IsOk = true;
 
                             att.Fatturata = "1";
-                            att.Tbmodified = DateTime.Now;
+                            att.Tbmodified = _now;
                             att.TbmodifiedId = _loginId;
                             efAllordCliAttivita.Add(att);
                         }
@@ -593,7 +589,7 @@ namespace FatturazioneContratti.Orders
                     {
                         cOrdRow.IsOk = true;
                         att.Fatturata = "1";
-                        att.Tbmodified = DateTime.Now;
+                        att.Tbmodified = _now;
                         att.TbmodifiedId = _loginId;
                         attIstat.Add(att);
                     }
@@ -649,7 +645,7 @@ namespace FatturazioneContratti.Orders
                     {
                         o.ALLOrdCliAcc.DataCessazione = cOrdRow.DataScadenzaFissa;
                         o.ALLOrdCliAcc.MotivoCessazione = "[AUTO] Scadenza Fissa";
-                        o.ALLOrdCliAcc.Tbmodified = DateTime.Now;
+                        o.ALLOrdCliAcc.Tbmodified = _now;
                         o.ALLOrdCliAcc.TbmodifiedId = _loginId;
                         efAllordCliAcc.Add(o.ALLOrdCliAcc);
                     }
@@ -665,7 +661,7 @@ namespace FatturazioneContratti.Orders
                         if (o.ALLOrdCliAcc != null && string.IsNullOrWhiteSpace(o.ALLOrdCliAcc.MotivoCessazione))
                         {
                             o.ALLOrdCliAcc.MotivoCessazione = "[AUTO] Data Cessazione";
-                            o.ALLOrdCliAcc.Tbmodified = DateTime.Now;
+                            o.ALLOrdCliAcc.Tbmodified = _now;
                             o.ALLOrdCliAcc.TbmodifiedId = _loginId;
                             efAllordCliAcc.Add(o.ALLOrdCliAcc);
                         }
@@ -693,8 +689,8 @@ namespace FatturazioneContratti.Orders
             riga.InternalOrdNo = cOrdRow.Parent.OrdNo;
             riga.Customer = cOrdRow.Parent.Cliente;
             riga.OrderDate = cOrdRow.Parent.OrdDate;
-            riga.Tbcreated = DateTime.Now;
-            riga.Tbmodified = DateTime.Now;
+            riga.Tbcreated = _now;
+            riga.Tbmodified = _now;
             riga.TbcreatedId = _loginId;
             riga.TbmodifiedId = _loginId;
             riga.Item = string.Empty;
@@ -734,8 +730,8 @@ namespace FatturazioneContratti.Orders
             riga.InternalOrdNo = cOrdRow.Parent.OrdNo;
             riga.Customer = cOrdRow.Parent.Cliente;
             riga.OrderDate = cOrdRow.Parent.OrdDate;
-            riga.Tbcreated = DateTime.Now;
-            riga.Tbmodified = DateTime.Now;
+            riga.Tbcreated = _now;
+            riga.Tbmodified = _now;
             riga.TbcreatedId = _loginId;
             riga.TbmodifiedId = _loginId;
             riga.Item = string.Empty;
@@ -813,8 +809,8 @@ namespace FatturazioneContratti.Orders
             riga.InternalOrdNo = cOrd.OrdNo;
             riga.Customer = cOrd.Cliente;
             riga.OrderDate = cOrd.OrdDate;
-            riga.Tbcreated = DateTime.Now;
-            riga.Tbmodified = DateTime.Now;
+            riga.Tbcreated = _now;
+            riga.Tbmodified = _now;
             riga.TbcreatedId = _loginId;
             riga.TbmodifiedId = _loginId;
 
@@ -906,8 +902,8 @@ namespace FatturazioneContratti.Orders
             riga.InternalOrdNo = cOrd.OrdNo;
             riga.Customer = cOrd.Cliente;
             riga.OrderDate = cOrd.OrdDate;
-            riga.Tbcreated = DateTime.Now;
-            riga.Tbmodified = DateTime.Now;
+            riga.Tbcreated = _now;
+            riga.Tbmodified = _now;
             riga.TbcreatedId = _loginId;
             riga.TbmodifiedId = _loginId;
 
@@ -947,7 +943,7 @@ namespace FatturazioneContratti.Orders
             List<AllordCliContratto> contratti,
             StringBuilder bulkMessage,
             StringBuilder errori,
-            Action<string> logMessage)
+            Action<string, AppConfig.LogTarget> logMessage)
         {
             if (totNuove == 0 && totAggiornate == 0) return;
 
@@ -965,7 +961,7 @@ namespace FatturazioneContratti.Orders
             {
                 string riassunto = $"[RIASSUNTO] Ordini con Righe: {totNuove} | Ordini con Adeguamenti: {totAggiornate}";
                 bulkMessage.AppendLine(riassunto);
-                logMessage?.Invoke(riassunto);
+                logMessage?.Invoke(riassunto, AppConfig.LogTarget.Ui);
             }
         }
 

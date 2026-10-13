@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using EFMago.Models;
+using FatturazioneContratti.Common;
 
 namespace FatturazioneContratti.Orders
 {

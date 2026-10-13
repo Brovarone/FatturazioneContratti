@@ -6,6 +6,7 @@ using System.Text;
 using EFCore.BulkExtensions;
 using EFMago.Models;
 using FatturazioneContratti.Common;
+using FatturazioneContratti.Config;
 using Microsoft.EntityFrameworkCore;
 
 namespace FatturazioneContratti.Orders
@@ -20,13 +21,16 @@ namespace FatturazioneContratti.Orders
         /// </summary>
         public bool AdeguaIstatOrdine(
             FiltriOrdini filtri,
-            Action<string> logMessage = null,
+            int dimensioneBlocco = 100,
+            Action<string, AppConfig.LogTarget> logMessage = null,
             Action<string> updateStatus = null,
-            Action advanceProgress = null)
+            ProgressCallbacks? progress1 = null,
+            ProgressCallbacks? progress2 = null,
+            ProgressCallbacks? progress3 = null)
         {
             if (filtri.PercIstat == 0)
             {
-                logMessage?.Invoke("Elaborazione Interrotta: Percentuale Adeguamento ISTAT pari a Zero o non valida.");
+                logMessage?.Invoke("Elaborazione Interrotta: Percentuale Adeguamento ISTAT pari a Zero o non valida.", AppConfig.LogTarget.Ui);
                 return false;
             }
 
@@ -42,31 +46,27 @@ namespace FatturazioneContratti.Orders
             {
                 updateStatus?.Invoke("Estrazione ordini per adeguamento ISTAT");
 
-                // Query con Include delle relazioni richieste per il controllo
-                IQueryable<MaSaleOrd> query = _context.MaSaleOrd
-                    .Include(acc => acc.ALLOrdCliAcc)
-                    .Include(con => con.ALLordCliContratto)
-                        .ThenInclude(it => it.MaItems)
-                    .Include(con => con.ALLordCliContratto)
-                        .ThenInclude(trs => trs.AlltipoRigaServizio)
-                    .Include(con => con.ALLordCliContratto)
-                        .ThenInclude(att => att.AllordCliAttivita)
-                            .ThenInclude(at => at.Allattivita)
-                    .Include(att => att.AllordCliAttivita)
-                        .ThenInclude(at => at.Allattivita);
+                // -------------------------------------------------------------------------
+                // STEP 1: ESTRAZIONE SOLO DEGLI ID (stesso pattern ID-first di GeneraRigheOrdine:
+                // i filtri sulla navigation ALLOrdCliAcc vengono tradotti in EXISTS, quindi
+                // nessun Include necessario e nessuna esplosione cartesiana).
+                // Prima qui veniva fatto ToList() sull'intero grafo: con molti ordini la
+                // split-query materializzava tutto in RAM in un colpo solo.
+                // -------------------------------------------------------------------------
+                IQueryable<MaSaleOrd> query = _context.MaSaleOrd.AsNoTracking();
 
                 // Filtro base: ordini con flag ISTAT attivo e non cessati prima della decorrenza
-                query = query.Where(o => o.ALLOrdCliAcc != null 
+                query = query.Where(o => o.ALLOrdCliAcc != null
                     && o.ALLOrdCliAcc.ApplicoIstat == "1"
-                    && (!o.ALLOrdCliAcc.DataCessazione.HasValue 
-                        || o.ALLOrdCliAcc.DataCessazione == DomainConstants.DataNulla 
+                    && (!o.ALLOrdCliAcc.DataCessazione.HasValue
+                        || o.ALLOrdCliAcc.DataCessazione == DomainConstants.DataNulla
                         || o.ALLOrdCliAcc.DataCessazione > filtri.DataDecorrenza));
 
                 // Filtri opzionali utente
                 if (filtri.FiltroDateOrdini)
                 {
-                    query = query.Where(o => o.OrderDate.HasValue 
-                        && o.OrderDate.Value.Date >= filtri.FromOrdDate 
+                    query = query.Where(o => o.OrderDate.HasValue
+                        && o.OrderDate.Value.Date >= filtri.FromOrdDate
                         && o.OrderDate.Value.Date <= filtri.ToOrdDate);
                 }
                 else
@@ -78,25 +78,63 @@ namespace FatturazioneContratti.Orders
                 if (filtri.SingoloOrdine) query = query.Where(o => o.InternalOrdNo == filtri.NrOrd);
                 if (filtri.SingolaFiliale) query = query.Where(o => o.CostCenter == filtri.Filiale);
 
-                var allOrders = query.ToList();
-                if (!allOrders.Any())
+                var allOrderIds = query
+                    .OrderBy(o => o.SaleOrdId)
+                    .Select(o => o.SaleOrdId)
+                    .ToList();
+
+                if (!allOrderIds.Any())
                 {
-                    logMessage?.Invoke("Nessun ordine estratto con i filtri ISTAT specificati.");
+                    logMessage?.Invoke("Nessun ordine estratto con i filtri ISTAT specificati.", AppConfig.LogTarget.Ui);
                     return true;
                 }
 
-                totOrdini = allOrders.Count;
+                totOrdini = allOrderIds.Count;
                 string msgTot = $"Ordini Estratti per ISTAT: {totOrdini}";
                 Debug.WriteLine(msgTot);
-                logMessage?.Invoke(msgTot);
+                logMessage?.Invoke(msgTot, AppConfig.LogTarget.Ui);
                 updateStatus?.Invoke(msgTot);
 
                 var efAllordCliAttivita = new List<AllordCliAttivita>();
                 var efAllordCliContratto = new List<AllordCliContratto>();
 
-                foreach (var o in allOrders)
+                // -------------------------------------------------------------------------
+                // STEP 2: CICLO A BLOCCHI SULLA LISTA DI ID (loader condiviso con GeneraRigheOrdine,
+                // include anche le attività di testa necessarie a curLastLineAtt).
+                // Implementato come iterator locale: il corpo del foreach seguente resta
+                // invariato e la progress2 avanza per ordine, la progress1 per blocco.
+                // -------------------------------------------------------------------------
+                IEnumerable<MaSaleOrd> CaricaOrdiniPerBlocco()
                 {
-                    advanceProgress?.Invoke();
+                    for (int i = 0; i < totOrdini; i += dimensioneBlocco)
+                    {
+                        int blockSize = Math.Min(dimensioneBlocco, totOrdini - i);
+                        progress2?.Init(0, Math.Max(1, blockSize));
+
+                        int[] blocId = allOrderIds.Skip(i).Take(blockSize).ToArray();
+                        var allOrdersChunk = LoadOrdersChunkByOrIn(
+                            _context,
+                            blocId,
+                            AppConfig.IsDebugging,
+                            msg => logMessage?.Invoke(msg, AppConfig.LogTarget.Ui));
+
+                        foreach (var o in allOrdersChunk)
+                        {
+                            progress2?.Advance(); // avanza la piccola per ogni ordine
+                            yield return o;
+                        }
+
+                        progress2?.Finish();   // fine blocco piccolo
+                        progress1?.Advance();  // un passo per il blocco completato
+                    }
+                }
+
+                // inizializzo progress principale (se richiesto): un passo per blocco
+                int numeroBlocchi = (totOrdini + dimensioneBlocco - 1) / dimensioneBlocco;
+                progress1?.Init(0, Math.Max(1, numeroBlocchi));
+
+                foreach (var o in CaricaOrdiniPerBlocco())
+                {
                     debugging.AppendLine($"Ordine: {o.InternalOrdNo}");
 
                     bool isNewRowsAtt = false;
@@ -251,32 +289,32 @@ namespace FatturazioneContratti.Orders
 
                             double newValUnit = Math.Round(cOrdRow.ValUnit * (1.0 + (filtri.PercIstat / 100.0)), DomainConstants.DecimaliTasse);
                             c.ValUnitIstat = newValUnit;
-                            c.DataUltRivIstat = DateTime.Now;
-                            c.DataFineElaborazione = DateTime.Now;
+                            c.DataUltRivIstat = _now;
+                            c.DataFineElaborazione = _now;
                             efAllordCliContratto.Add(c);
 
-                            // Creazione riga nuova attività di tipo ISTAT
+                            // Pattern prototipo: materializza i default Fluent API (HasDefaultValueSql)
+                            // come il DataSet.AddNew del VB. Con "new AllordCliAttivita" le colonne
+                            // non valorizzate restavano al default CLR invece del default Mago.
                             iNewRowsAttCount++;
-                            var rAtt = new AllordCliAttivita
-                            {
-                                IdOrdCli = cOrd.SaleOrdId,
-                                Line = (short)(curLastLineAtt + iNewRowsAttCount),
-                                Attivita = "ISTAT",
-                                DataInizio = filtri.DataDecorrenza,
-                                DataFine = DomainConstants.DataNulla,
-                                DaFatturare = "1",
-                                DataRifatturazione = cOrdRow.DataPrevistaConsegna,
-                                Fatturata = "0",
-                                Nota = $"Adeguamento ISTAT ({filtri.PercIstat}%). Precedente: {cOrdRow.ValUnit}",
-                                TestoFattura = filtri.TestoFattura,
-                                RifServizio = cOrdRow.Item,
-                                RifLinea = cOrdRow.Line,
-                                ValUnit = newValUnit,
-                                Tbcreated = DateTime.Now,
-                                Tbmodified = DateTime.Now,
-                                TbcreatedId = _loginId,
-                                TbmodifiedId = _loginId
-                            };
+                            var rAtt = _context.AddNew<AllordCliAttivita>();
+                            rAtt.IdOrdCli = cOrd.SaleOrdId;
+                            rAtt.Line = (short)(curLastLineAtt + iNewRowsAttCount);
+                            rAtt.Attivita = "ISTAT";
+                            rAtt.DataInizio = filtri.DataDecorrenza;
+                            rAtt.DataFine = DomainConstants.DataNulla;
+                            rAtt.DaFatturare = "1";
+                            rAtt.DataRifatturazione = cOrdRow.DataPrevistaConsegna;
+                            rAtt.Fatturata = "0";
+                            rAtt.Nota = $"Adeguamento ISTAT ({filtri.PercIstat}%). Precedente: {cOrdRow.ValUnit}";
+                            rAtt.TestoFattura = filtri.TestoFattura;
+                            rAtt.RifServizio = cOrdRow.Item;
+                            rAtt.RifLinea = cOrdRow.Line;
+                            rAtt.ValUnit = newValUnit;
+                            rAtt.Tbcreated = _now;
+                            rAtt.Tbmodified = _now;
+                            rAtt.TbcreatedId = _loginId;
+                            rAtt.TbmodifiedId = _loginId;
                             efAllordCliAttivita.Add(rAtt);
 
                             // Adeguamento righe di attività sospese
@@ -284,7 +322,7 @@ namespace FatturazioneContratti.Orders
                             {
                                 adeg.ValUnit = newValUnit;
                                 adeg.TestoFattura = "Adeguato a ISTAT";
-                                adeg.Tbmodified = DateTime.Now;
+                                adeg.Tbmodified = _now;
                                 adeg.TbmodifiedId = _loginId;
                                 efAllordCliAttivita.Add(adeg);
                             }
@@ -298,9 +336,12 @@ namespace FatturazioneContratti.Orders
                     }
                 }
 
+                // finalize progress
+                progress1?.Finish();
+
                 // Salvataggio Bulk transazionale
                 string msgValid = $"Ordini con righe Contratto valide per ISTAT: {totOrdiniOk}";
-                logMessage?.Invoke(msgValid);
+                logMessage?.Invoke(msgValid, AppConfig.LogTarget.Ui);
 
                 if (totOrdiniOk > 0)
                 {
@@ -316,7 +357,7 @@ namespace FatturazioneContratti.Orders
                     {
                         string esitoMsg = $"Processati con successo: {totOrdiniOk} ordini per adeguamento ISTAT.";
                         bulkMessage.AppendLine(esitoMsg);
-                        logMessage?.Invoke(esitoMsg);
+                        logMessage?.Invoke(esitoMsg, AppConfig.LogTarget.Ui);
                     }
                     else
                     {
@@ -329,7 +370,7 @@ namespace FatturazioneContratti.Orders
                 Debug.WriteLine(ex.Message);
                 errori.AppendLine($"[Procedura ISTAT] Messaggio: {ex.Message}");
                 errori.AppendLine($"[Procedura ISTAT] Stack: {ex.StackTrace}");
-                logMessage?.Invoke($"ERRORE ISTAT: {ex.Message}");
+                logMessage?.Invoke($"ERRORE ISTAT: {ex.Message}", AppConfig.LogTarget.Ui);
                 return false;
             }
 
