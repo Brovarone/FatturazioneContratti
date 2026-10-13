@@ -1,7 +1,7 @@
-﻿using FatturazioneContratti.Config;
-using FatturazioneContratti.Data;
-using FatturazioneContratti.Invoicing;
+﻿using FatturazioneContratti.Invoicing;
 using FatturazioneContratti.Orders;
+using FatturazioneContratti.Config;
+using FatturazioneContratti.Data;
 using System;
 using System.Data;
 using System.Drawing;
@@ -18,6 +18,10 @@ namespace FatturazioneContratti.Forms
         private UiProgress _progressMain;
         private UiProgress _progressSub;
         //private UiProgress? _progressSubChild;
+
+        // nuovi campi per il logging su file
+        private string _logFilePath = string.Empty;
+        private readonly object _logLock = new object();               
 
         private void esciToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -70,16 +74,7 @@ namespace FatturazioneContratti.Forms
         {
             // 1. Carica da JSON
             AppConfig.Load();
-
-            // 2. Assegna ai controlli UI
-            txtServer.Text = AppConfig.SqlServer;
-            txtUser.Text = AppConfig.UserId;
-            txtPassword.Text = AppConfig.Password;
-            txtLoginId.Text = AppConfig.LoginId.ToString();
-            chkTestDb.Checked = AppConfig.IsTestDb;
-            chkDebug.Checked = AppConfig.IsDebugging;
-            if (AppConfig.IsDbUno) rdoUno.Checked = true; else rdoSpa.Checked = true;
-
+                        
             UpdateAziendaStatus();
             InizializzaControlliBloccabili();
 
@@ -87,35 +82,36 @@ namespace FatturazioneContratti.Forms
             _progressMain = new UiProgress(progressBar);
             _progressSub = new UiProgress(subProgressBar);
             //_progressSubChild = new UiProgress(subProgressBar3);
-        }
 
-        private void btnTestConnection_Click(object sender, EventArgs e)
-        {
-            SyncConfigFromUI();
+            // Inizializza logging su file per la sessione
             try
             {
-                using var conn = SqlTools.OpenDirectConnection();
-                Log($"Connessione riuscita a: {conn.Database} (Server: {conn.DataSource})");
-                MessageBox.Show("Connessione stabilita con successo!", "Connessione", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                string logsDir;
+                if (!string.IsNullOrWhiteSpace(AppConfig.LastLogPath) && Directory.Exists(AppConfig.LastLogPath))
+                {
+                    logsDir = AppConfig.LastLogPath;
+                }
+                else
+                {
+                    logsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Brovarone Cristiano", "Logs");
+                    Directory.CreateDirectory(logsDir);
+                }
+
+                _logFilePath = Path.Combine(logsDir, $"FatturazioneContratti_{DateTime.Now:yyyyMMdd_HHmmss}.log");
+
+                // salva la cartella log in configurazione per eventuale accesso futuro
+                AppConfig.LastLogPath = logsDir;
+                AppConfig.Save();
+
+                // indico nel log che il file è pronto (rispetta modalità di log)
+                //Log($"Log file: {_logFilePath}");
+                //Log($"Modalità log corrente: {AppConfig.LogMode}");
             }
-            catch (Exception ex)
+            catch
             {
-                Log($"ERRORE Connessione: {ex.Message}");
-                MessageBox.Show($"Impossibile connettersi: {ex.Message}", "Errore", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                // Non bloccare l'app se il logging su file fallisce; resta il log su UI
             }
-        }
-
-        private void rdoAzienda_CheckedChanged(object sender, EventArgs e)
-        {
-            AppConfig.IsDbUno = rdoUno.Checked;
-            UpdateAziendaStatus();
-        }
-
-        private void chkTestDb_CheckedChanged(object sender, EventArgs e)
-        {
-            AppConfig.IsTestDb = chkTestDb.Checked;
-            UpdateAziendaStatus();
-        }
+        }                              
 
         private void UpdateAziendaStatus()
         {
@@ -123,24 +119,9 @@ namespace FatturazioneContratti.Forms
             lblDbInUso.ForeColor = AppConfig.IsTestDb ? Color.DarkOrange : Color.DarkGreen;
         }
 
-        private void SyncConfigFromUI()
-        {
-            AppConfig.SqlServer = txtServer.Text.Trim();
-            AppConfig.UserId = txtUser.Text.Trim();
-            AppConfig.Password = txtPassword.Text;
-            AppConfig.LoginId = int.TryParse(txtLoginId.Text.Trim(), out int id) ? id : 1;
-            AppConfig.IsTestDb = chkTestDb.Checked;
-            AppConfig.IsDbUno = rdoUno.Checked;
-            AppConfig.IsDebugging = chkDebug.Checked;
-
-            // Salva sul file JSON!
-            AppConfig.Save();
-        }
-
         // --- PROCESSO 1: GENERAZIONE RIGHE ORDINE (CANONI) ---
         private void btnGeneraOrdini_Click(object sender, EventArgs e)
-        {
-            SyncConfigFromUI();
+        {           
             AggiornaStato("Elaborazione in corso...");
 
             using var formFiltri = new FAskFiltriOrdini { IsIstat = false };
@@ -162,14 +143,12 @@ namespace FatturazioneContratti.Forms
                         () => _progressMain?.Advance(), 
                         () => _progressMain?.Finish()),
                     progress2: new ProgressCallbacks((min, max) => _progressSub?.Init(min, max), () => _progressSub?.Advance(), () => _progressSub?.Finish()));
-        });
+            });
         }
 
         // --- PROCESSO 2: ADEGUAMENTO ISTAT ORDINI ---
         private void btnAdeguamentoIstat_Click(object sender, EventArgs e)
         {
-            SyncConfigFromUI();
-
             using var formFiltri = new FAskFiltriOrdini { IsIstat = true };
             if (formFiltri.ShowDialog() != DialogResult.OK) return;
 
@@ -188,17 +167,21 @@ namespace FatturazioneContratti.Forms
                 return service.AdeguaIstatOrdine(
                     filtri,
                     logMessage: Log,
-                    updateStatus: AggiornaStato
-                    //,advanceProgress: AvanzaProgress
-                    );
+                    updateStatus: AggiornaStato,
+                    progress1: new ProgressCallbacks(
+                        (min, max) => _progressMain?.Init(min, max),
+                        () => _progressMain?.Advance(),
+                        () => _progressMain?.Finish()),
+                    progress2: new ProgressCallbacks(
+                        (min, max) => _progressSub?.Init(min, max),
+                        () => _progressSub?.Advance(),
+                        () => _progressSub?.Finish()));
             });
         }
 
         // --- PROCESSO 3: CONSUNTIVAZIONE FLUSSO INTEGRA & FATTURE ---
         private void btnConsuntivi_Click(object sender, EventArgs e)
         {
-            SyncConfigFromUI();
-
             using var formFiltri = new FAskFiltriOrdiniConsuntivo();
             if (formFiltri.ShowDialog() != DialogResult.OK) return;
 
@@ -209,29 +192,63 @@ namespace FatturazioneContratti.Forms
                 using var ctx = SqlTools.CreateContext();
                 var service = new ConsuntivoService(ctx, AppConfig.LoginId);
 
-                Log("--- Step 1: Controllo Corrispondenze Flusso Integra ---");
-                bool checkOk = service.ControllaFlussoIntegra(filtri, Log, AggiornaStato
-                    //, AvanzaProgress
-                    );
+                bool checkOk = true;
 
-                if (!checkOk)
+                // Step 1: Controllo (se richiesto)
+                if (filtri.Azione == ActionMode.SoloControllo || filtri.Azione == ActionMode.ControlloEFattura)
                 {
-                    Log("Controllo flusso terminato con incongruenze. Interruzione generazione fatture.");
-                    return false;
+                    Log("--- Step 1: Controllo Corrispondenze Flusso Integra ---");
+                    checkOk = service.ControllaFlussoIntegra(
+                        filtri,
+                        Log,
+                        AggiornaStato,
+                        new ProgressCallbacks(
+                            (min, max) => _progressMain?.Init(min, max),
+                            () => _progressMain?.Advance(),
+                            () => _progressMain?.Finish()),
+                        new ProgressCallbacks(
+                            (min, max) => _progressSub?.Init(min, max),
+                            () => _progressSub?.Advance(),
+                            () => _progressSub?.Finish())
+                        );
+
+                    if (!checkOk)
+                    {
+                        Log("Controllo flusso terminato con incongruenze. Interruzione generazione fatture.");
+                        return false;
+                    }
+                }
+                else
+                {
+                    Log("--- Step 1: Saltato (Solo Fatturazione selezionato) ---");
                 }
 
-                Log("--- Step 2: Generazione Fatture a Consuntivo ---");
-                return service.GeneraFattureConsuntivo(filtri, Log, AggiornaStato
-                    //, AvanzaProgress
-                    );
+                // Step 2: Fatturazione (se richiesto)
+                if (filtri.Azione == ActionMode.ControlloEFattura || filtri.Azione == ActionMode.SoloFattura)
+                {
+                    Log("--- Step 2: Generazione Fatture a Consuntivo ---");
+                    return service.GeneraFattureConsuntivo(
+                        filtri,
+                        Log,
+                        AggiornaStato,
+                        new ProgressCallbacks(
+                            (min, max) => _progressMain?.Init(min, max),
+                            () => _progressMain?.Advance(),
+                            () => _progressMain?.Finish()),
+                        new ProgressCallbacks(
+                            (min, max) => _progressSub?.Init(min, max),
+                            () => _progressSub?.Advance(),
+                            () => _progressSub?.Finish()));
+                }
+
+                Log("--- Step 2: Saltato (Solo Controllo selezionato) ---");
+                return checkOk;
             });
         }
 
         // --- PROCESSO 4: ALLINEAMENTO DATE CANONI FATTURE DA ORDINI ---
         private void btnAllineaFattureOrdini_Click(object sender, EventArgs e)
-        {
-            SyncConfigFromUI();
-
+        {           
             DateTime fineMese = new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month));
             DateTime inizioAnno = new DateTime(DateTime.Today.Year, 1, 1);
 
@@ -267,6 +284,7 @@ namespace FatturazioneContratti.Forms
 
             // UI iniziale
             SetUiBusy(true);
+            lnkApriLog.Visible = false;   // via il link della sessione precedente
             Log($"=== AVVIO: {nomeProcesso} ({DateTime.Now:dd/MM/yyyy HH:mm:ss}) ===");
 
             // Esegui il lavoro su background per non bloccare la UI
@@ -277,11 +295,22 @@ namespace FatturazioneContratti.Forms
                 {
                     esito = azione();
 
-                    // Posta il risultato sul thread UI
+                    // Posta il risultato sulthread UI
                     Invoke(new Action(() =>
                     {
                         Log(esito ? $"=== COMPLETATO CON SUCCESSO: {nomeProcesso} ==="
                                   : $"=== COMPLETATO CON ERRORI: {nomeProcesso} ===");
+
+                        // La label di stato deve mostrare l'esito finale: senza questo
+                        // restava sull'ultimo messaggio intermedio del servizio
+                        // (es. "Salvataggio ... in corso...") e non si capiva che aveva finito.
+                        AggiornaStato(
+                            esito ? $"Completato con successo: {nomeProcesso}"
+                                  : $"Completato con errori: {nomeProcesso}",
+                            esito ? Color.DarkGreen : Color.DarkRed);
+
+                        // Link al file di log della sessione appena conclusa
+                        lnkApriLog.Visible = true;
                     }));
                 }
                 catch (Exception ex)
@@ -290,6 +319,8 @@ namespace FatturazioneContratti.Forms
                     Invoke(new Action(() =>
                     {
                         Log($"ERRORE CRITICO in {nomeProcesso}: {ex.Message}");
+                        AggiornaStato($"Errore critico in {nomeProcesso}: {ex.Message}", Color.DarkRed);
+                        lnkApriLog.Visible = true;   // il log può contenere il dettaglio dell'errore
                         MessageBox.Show(ex.Message, "Errore di esecuzione", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }));
                 }
@@ -301,34 +332,153 @@ namespace FatturazioneContratti.Forms
             });
         }
 
-        private void Log(string message)
+        /// <summary>
+        /// Scrive il log SOLO su UI (comportamento di default quando non viene specificata destinazione).
+        /// Compatibile con Action<string> usato dai servizi.
+        /// </summary>
+        public void Log(string message)
+        {
+            // default: solo UI
+            Log(message, AppConfig.LogTarget.Ui);
+        }
+
+        /// <summary>
+        /// Scrive il log su UI / file / entrambi in base a <paramref name="destination"/>.
+        /// Sovraccarico compatibile con Action<string, AppConfig.LogTarget> se i servizi vengono aggiornati.
+        /// </summary>
+        public void Log(string message, AppConfig.LogTarget destination)
         {
             if (string.IsNullOrWhiteSpace(message)) return;
 
-            if (InvokeRequired)
+            string timed = $"[{DateTime.Now:HH:mm:ss}] {message}";
+
+            // Se serve scrivere su UI ma siamo in thread non-UI => marshaling
+            if ((destination == AppConfig.LogTarget.Ui || destination == AppConfig.LogTarget.Both) && InvokeRequired)
             {
-                // Marshal verso UI
-                BeginInvoke(new Action(() => Log(message)));
+                BeginInvoke(new Action(() => Log(message, destination)));
                 return;
             }
 
-            lstStato.Items.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
-            lstStato.TopIndex = lstStato.Items.Count - 1;            
+            // Scrive su UI
+            if (destination == AppConfig.LogTarget.Ui || destination == AppConfig.LogTarget.Both)
+            {
+                try
+                {
+                    lstStato.Items.Add(timed);
+                    lstStato.TopIndex = Math.Max(0, lstStato.Items.Count - 1);
+                }
+                catch
+                {
+                    // non bloccare l'app per errori UI
+                }
+            }
+
+            // Scrive su file (se impostato)
+            if (destination == AppConfig.LogTarget.File || destination == AppConfig.LogTarget.Both)
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(_logFilePath))
+                    {
+                        lock (_logLock)
+                        {
+                            File.AppendAllText(_logFilePath, $"{timed}{Environment.NewLine}");
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignoro errori di scrittura su file
+                }
+            }
         }
 
+        /// <summary>
+        /// Helper compatibile con Action<string> per forzare UI (utile quando passi il delegato ai servizi).
+        /// </summary>
+            public void LogToUi(string message) => Log(message, AppConfig.LogTarget.Ui);
+
+        /// <summary>
+        /// Helper compatibile con Action<string> per forzare file (utile quando passi il delegato ai servizi).
+        /// </summary>
+        public void LogToFile(string message) => Log(message, AppConfig.LogTarget.File);
+
         private void AggiornaStato(string status)
+        {
+            AggiornaStato(status, null);
+        }
+
+        private void AggiornaStato(string status, Color? colore)
         {
             if (InvokeRequired)
             {
                 // Marshal verso UI
-                BeginInvoke(new Action(() => AggiornaStato(status)));
+                BeginInvoke(new Action(() => AggiornaStato(status, colore)));
                 return;
             }
 
-            lblStatus.Text = status;            
+            lblStatus.Text = status;
+            if (colore.HasValue) lblStatus.ForeColor = colore.Value;
         }        
 
-        private void btnPulisciLog_Click(object sender, EventArgs e) => lstStato.Items.Clear();
+        private void btnPulisciStato_Click(object sender, EventArgs e) => lstStato.Items.Clear();
+
+        private void lnkApriLog_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        {
+            ApriFileLog();
+        }
+
+        /// <summary>
+        /// Apre il file di log della sessione con l'editor associato all'estensione .log
+        /// (associazione di sistema, es. Notepad). Se il file non è disponibile,
+        /// ripiega sul Notepad e, in ultima istanza, apre la cartella dei log.
+        /// </summary>
+        private void ApriFileLog()
+        {
+            if (string.IsNullOrWhiteSpace(_logFilePath) || !File.Exists(_logFilePath))
+            {
+                MessageBox.Show(
+                    "File di log della sessione non disponibile (scrittura su file non attiva). Apro la cartella dei log.",
+                    "Apri log", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                AppConfig.ApriCartellaLog();
+                return;
+            }
+
+            try
+            {
+                // UseShellExecute = rispetta l'editor di testo predefinito associato a .log
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = _logFilePath,
+                    UseShellExecute = true
+                });
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Nessuna applicazione associata a .log: ripiego sul Notepad di Windows
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "notepad.exe",
+                        Arguments = _logFilePath,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception exNotepad)
+                {
+                    MessageBox.Show($"Impossibile aprire il file di log: {exNotepad.Message}",
+                        "Apri log", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    AppConfig.ApriCartellaLog();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Impossibile aprire il file di log: {ex.Message}",
+                    "Apri log", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                AppConfig.ApriCartellaLog();
+            }
+        }
 
         //  --- Controlli da bloccare durante un'elaborazione. Adatta i nomi a quelli reali della tua form.  --- 
         private Control[] _controlliDaBloccare;
@@ -341,11 +491,7 @@ namespace FatturazioneContratti.Forms
                 btnGeneraOrdini,
                 btnAdeguamentoIstat,
                 btnConsuntivi,
-                btnAllineaFattureOrdini,
-                btnTestConnection,
-                txtServer, txtUser, txtPassword, txtLoginId,
-                chkTestDb, chkDebug,
-                rdoUno, rdoSpa
+                btnAllineaFattureOrdini                
                 // NON metto btnPulisciLog né lstStato: devono restare usabili
             };
         }

@@ -29,22 +29,6 @@
             moduliToolStripMenuItem = new ToolStripMenuItem();
             contrattiFatturazioneToolStripMenuItem = new ToolStripMenuItem();
             pagheToolStripMenuItem = new ToolStripMenuItem();
-            grpConn = new GroupBox();
-            btnTestConnection = new Button();
-            txtLoginId = new TextBox();
-            lblLoginId = new Label();
-            txtPassword = new TextBox();
-            lblPsw = new Label();
-            txtUser = new TextBox();
-            lblUser = new Label();
-            txtServer = new TextBox();
-            lblServer = new Label();
-            grpAzienda = new GroupBox();
-            chkDebug = new CheckBox();
-            lblDbInUso = new Label();
-            chkTestDb = new CheckBox();
-            rdoSpa = new RadioButton();
-            rdoUno = new RadioButton();
             grpAzioni = new GroupBox();
             btnAllineaFattureOrdini = new Button();
             btnConsuntivi = new Button();
@@ -53,11 +37,11 @@
             lstStato = new ListBox();
             progressBar = new ProgressBar();
             lblStatus = new Label();
-            btnPulisciLog = new Button();
+            lblDbInUso = new Label();
+            btnPulisciStato = new Button();
             subProgressBar = new ProgressBar();
+            lnkApriLog = new LinkLabel();
             menuStripPrincipal.SuspendLayout();
-            grpConn.SuspendLayout();
-            grpAzienda.SuspendLayout();
             grpAzioni.SuspendLayout();
             SuspendLayout();
             // 
@@ -148,198 +132,18 @@
             pagheToolStripMenuItem.Text = "Flusso &Paghe";
             pagheToolStripMenuItem.Click += pagheToolStripMenuItem_Click;
             // 
-            // grpConn
-            // 
-            grpConn.Controls.Add(btnTestConnection);
-            grpConn.Controls.Add(txtLoginId);
-            grpConn.Controls.Add(lblLoginId);
-            grpConn.Controls.Add(txtPassword);
-            grpConn.Controls.Add(lblPsw);
-            grpConn.Controls.Add(txtUser);
-            grpConn.Controls.Add(lblUser);
-            grpConn.Controls.Add(txtServer);
-            grpConn.Controls.Add(lblServer);
-            grpConn.Location = new Point(14, 37);
-            grpConn.Margin = new Padding(4, 3, 4, 3);
-            grpConn.Name = "grpConn";
-            grpConn.Padding = new Padding(4, 3, 4, 3);
-            grpConn.Size = new Size(653, 92);
-            grpConn.TabIndex = 1;
-            grpConn.TabStop = false;
-            grpConn.Text = "Connessione SQL Server";
-            // 
-            // btnTestConnection
-            // 
-            btnTestConnection.Location = new Point(531, 21);
-            btnTestConnection.Margin = new Padding(4, 3, 4, 3);
-            btnTestConnection.Name = "btnTestConnection";
-            btnTestConnection.Size = new Size(111, 28);
-            btnTestConnection.TabIndex = 8;
-            btnTestConnection.Text = "Test Conn.";
-            btnTestConnection.UseVisualStyleBackColor = true;
-            btnTestConnection.Click += btnTestConnection_Click;
-            // 
-            // txtLoginId
-            // 
-            txtLoginId.Location = new Point(70, 55);
-            txtLoginId.Margin = new Padding(4, 3, 4, 3);
-            txtLoginId.Name = "txtLoginId";
-            txtLoginId.Size = new Size(58, 23);
-            txtLoginId.TabIndex = 7;
-            // 
-            // lblLoginId
-            // 
-            lblLoginId.AutoSize = true;
-            lblLoginId.Location = new Point(12, 59);
-            lblLoginId.Margin = new Padding(4, 0, 4, 0);
-            lblLoginId.Name = "lblLoginId";
-            lblLoginId.Size = new Size(50, 15);
-            lblLoginId.TabIndex = 6;
-            lblLoginId.Text = "LoginId:";
-            // 
-            // txtPassword
-            // 
-            txtPassword.Location = new Point(420, 23);
-            txtPassword.Margin = new Padding(4, 3, 4, 3);
-            txtPassword.Name = "txtPassword";
-            txtPassword.PasswordChar = '*';
-            txtPassword.Size = new Size(93, 23);
-            txtPassword.TabIndex = 5;
-            // 
-            // lblPsw
-            // 
-            lblPsw.AutoSize = true;
-            lblPsw.Location = new Point(379, 27);
-            lblPsw.Margin = new Padding(4, 0, 4, 0);
-            lblPsw.Name = "lblPsw";
-            lblPsw.Size = new Size(31, 15);
-            lblPsw.TabIndex = 4;
-            lblPsw.Text = "Psw:";
-            // 
-            // txtUser
-            // 
-            txtUser.Location = new Point(268, 23);
-            txtUser.Margin = new Padding(4, 3, 4, 3);
-            txtUser.Name = "txtUser";
-            txtUser.Size = new Size(93, 23);
-            txtUser.TabIndex = 3;
-            // 
-            // lblUser
-            // 
-            lblUser.AutoSize = true;
-            lblUser.Location = new Point(222, 27);
-            lblUser.Margin = new Padding(4, 0, 4, 0);
-            lblUser.Name = "lblUser";
-            lblUser.Size = new Size(33, 15);
-            lblUser.TabIndex = 2;
-            lblUser.Text = "User:";
-            // 
-            // txtServer
-            // 
-            txtServer.Location = new Point(70, 23);
-            txtServer.Margin = new Padding(4, 3, 4, 3);
-            txtServer.Name = "txtServer";
-            txtServer.Size = new Size(139, 23);
-            txtServer.TabIndex = 1;
-            // 
-            // lblServer
-            // 
-            lblServer.AutoSize = true;
-            lblServer.Location = new Point(12, 27);
-            lblServer.Margin = new Padding(4, 0, 4, 0);
-            lblServer.Name = "lblServer";
-            lblServer.Size = new Size(42, 15);
-            lblServer.TabIndex = 0;
-            lblServer.Text = "Server:";
-            // 
-            // grpAzienda
-            // 
-            grpAzienda.Controls.Add(chkDebug);
-            grpAzienda.Controls.Add(lblDbInUso);
-            grpAzienda.Controls.Add(chkTestDb);
-            grpAzienda.Controls.Add(rdoSpa);
-            grpAzienda.Controls.Add(rdoUno);
-            grpAzienda.Location = new Point(14, 136);
-            grpAzienda.Margin = new Padding(4, 3, 4, 3);
-            grpAzienda.Name = "grpAzienda";
-            grpAzienda.Padding = new Padding(4, 3, 4, 3);
-            grpAzienda.Size = new Size(653, 69);
-            grpAzienda.TabIndex = 2;
-            grpAzienda.TabStop = false;
-            grpAzienda.Text = "Database & Azienda";
-            // 
-            // chkDebug
-            // 
-            chkDebug.AutoSize = true;
-            chkDebug.Location = new Point(525, 23);
-            chkDebug.Margin = new Padding(4, 3, 4, 3);
-            chkDebug.Name = "chkDebug";
-            chkDebug.Size = new Size(82, 19);
-            chkDebug.TabIndex = 4;
-            chkDebug.Text = "Debug ON";
-            chkDebug.UseVisualStyleBackColor = true;
-            // 
-            // lblDbInUso
-            // 
-            lblDbInUso.AutoSize = true;
-            lblDbInUso.Font = new Font("Microsoft Sans Serif", 8.25F, FontStyle.Bold, GraphicsUnit.Point, 0);
-            lblDbInUso.Location = new Point(14, 46);
-            lblDbInUso.Margin = new Padding(4, 0, 4, 0);
-            lblDbInUso.Name = "lblDbInUso";
-            lblDbInUso.Size = new Size(107, 13);
-            lblDbInUso.TabIndex = 3;
-            lblDbInUso.Text = "Database: (None)";
-            // 
-            // chkTestDb
-            // 
-            chkTestDb.AutoSize = true;
-            chkTestDb.Location = new Point(257, 23);
-            chkTestDb.Margin = new Padding(4, 3, 4, 3);
-            chkTestDb.Name = "chkTestDb";
-            chkTestDb.Size = new Size(119, 19);
-            chkTestDb.TabIndex = 2;
-            chkTestDb.Text = "Usa Database Test";
-            chkTestDb.UseVisualStyleBackColor = true;
-            chkTestDb.CheckedChanged += chkTestDb_CheckedChanged;
-            // 
-            // rdoSpa
-            // 
-            rdoSpa.AutoSize = true;
-            rdoSpa.Location = new Point(134, 23);
-            rdoSpa.Margin = new Padding(4, 3, 4, 3);
-            rdoSpa.Name = "rdoSpa";
-            rdoSpa.Size = new Size(90, 19);
-            rdoSpa.TabIndex = 1;
-            rdoSpa.Text = "Azienda SPA";
-            rdoSpa.UseVisualStyleBackColor = true;
-            rdoSpa.CheckedChanged += rdoAzienda_CheckedChanged;
-            // 
-            // rdoUno
-            // 
-            rdoUno.AutoSize = true;
-            rdoUno.Checked = true;
-            rdoUno.Location = new Point(18, 23);
-            rdoUno.Margin = new Padding(4, 3, 4, 3);
-            rdoUno.Name = "rdoUno";
-            rdoUno.Size = new Size(96, 19);
-            rdoUno.TabIndex = 0;
-            rdoUno.TabStop = true;
-            rdoUno.Text = "Azienda UNO";
-            rdoUno.UseVisualStyleBackColor = true;
-            rdoUno.CheckedChanged += rdoAzienda_CheckedChanged;
-            // 
             // grpAzioni
             // 
             grpAzioni.Controls.Add(btnAllineaFattureOrdini);
             grpAzioni.Controls.Add(btnConsuntivi);
             grpAzioni.Controls.Add(btnAdeguamentoIstat);
             grpAzioni.Controls.Add(btnGeneraOrdini);
-            grpAzioni.Location = new Point(14, 212);
+            grpAzioni.Location = new Point(14, 37);
             grpAzioni.Margin = new Padding(4, 3, 4, 3);
             grpAzioni.Name = "grpAzioni";
             grpAzioni.Padding = new Padding(4, 3, 4, 3);
             grpAzioni.Size = new Size(653, 110);
-            grpAzioni.TabIndex = 3;
+            grpAzioni.TabIndex = 1;
             grpAzioni.TabStop = false;
             grpAzioni.Text = "Operazioni di Elaborazione";
             // 
@@ -392,15 +196,15 @@
             // 
             lstStato.FormattingEnabled = true;
             lstStato.ItemHeight = 15;
-            lstStato.Location = new Point(14, 329);
+            lstStato.Location = new Point(14, 153);
             lstStato.Margin = new Padding(4, 3, 4, 3);
             lstStato.Name = "lstStato";
-            lstStato.Size = new Size(653, 184);
-            lstStato.TabIndex = 4;
+            lstStato.Size = new Size(653, 259);
+            lstStato.TabIndex = 2;
             // 
             // progressBar
             // 
-            progressBar.Location = new Point(14, 547);
+            progressBar.Location = new Point(14, 460);
             progressBar.Margin = new Padding(4, 3, 4, 3);
             progressBar.Name = "progressBar";
             progressBar.Size = new Size(653, 21);
@@ -410,27 +214,38 @@
             // lblStatus
             // 
             lblStatus.AutoSize = true;
-            lblStatus.Location = new Point(14, 522);
+            lblStatus.Location = new Point(14, 440);
             lblStatus.Margin = new Padding(4, 0, 4, 0);
             lblStatus.Name = "lblStatus";
             lblStatus.Size = new Size(43, 15);
             lblStatus.TabIndex = 5;
             lblStatus.Text = "Pronto";
             // 
-            // btnPulisciLog
+            // lblDbInUso
             // 
-            btnPulisciLog.Location = new Point(562, 517);
-            btnPulisciLog.Margin = new Padding(4, 3, 4, 3);
-            btnPulisciLog.Name = "btnPulisciLog";
-            btnPulisciLog.Size = new Size(105, 25);
-            btnPulisciLog.TabIndex = 6;
-            btnPulisciLog.Text = "Pulisci Log";
-            btnPulisciLog.UseVisualStyleBackColor = true;
-            btnPulisciLog.Click += btnPulisciLog_Click;
+            lblDbInUso.AutoSize = true;
+            lblDbInUso.Font = new Font("Microsoft Sans Serif", 8.25F, FontStyle.Bold);
+            lblDbInUso.Location = new Point(14, 415);
+            lblDbInUso.Margin = new Padding(4, 0, 4, 0);
+            lblDbInUso.Name = "lblDbInUso";
+            lblDbInUso.Size = new Size(107, 13);
+            lblDbInUso.TabIndex = 9;
+            lblDbInUso.Text = "Database: (None)";
+            // 
+            // btnPulisciStato
+            // 
+            btnPulisciStato.Location = new Point(562, 430);
+            btnPulisciStato.Margin = new Padding(4, 3, 4, 3);
+            btnPulisciStato.Name = "btnPulisciStato";
+            btnPulisciStato.Size = new Size(105, 25);
+            btnPulisciStato.TabIndex = 6;
+            btnPulisciStato.Text = "Pulisci";
+            btnPulisciStato.UseVisualStyleBackColor = true;
+            btnPulisciStato.Click += btnPulisciStato_Click;
             // 
             // subProgressBar
             // 
-            subProgressBar.Location = new Point(346, 519);
+            subProgressBar.Location = new Point(346, 435);
             subProgressBar.Margin = new Padding(4, 3, 4, 3);
             subProgressBar.Name = "subProgressBar";
             subProgressBar.Size = new Size(208, 21);
@@ -438,19 +253,30 @@
             subProgressBar.TabIndex = 8;
             subProgressBar.Visible = false;
             // 
+            // lnkApriLog
+            // 
+            lnkApriLog.Location = new Point(14, 487);
+            lnkApriLog.Name = "lnkApriLog";
+            lnkApriLog.Size = new Size(120, 17);
+            lnkApriLog.TabIndex = 10;
+            lnkApriLog.TabStop = true;
+            lnkApriLog.Text = "Apri file di log";
+            lnkApriLog.Visible = false;
+            lnkApriLog.LinkClicked += lnkApriLog_LinkClicked;
+            // 
             // FLogin
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(681, 586);
+            ClientSize = new Size(681, 520);
             Controls.Add(subProgressBar);
-            Controls.Add(btnPulisciLog);
+            Controls.Add(lnkApriLog);
+            Controls.Add(btnPulisciStato);
+            Controls.Add(lblDbInUso);
             Controls.Add(lblStatus);
             Controls.Add(progressBar);
             Controls.Add(lstStato);
             Controls.Add(grpAzioni);
-            Controls.Add(grpAzienda);
-            Controls.Add(grpConn);
             Controls.Add(menuStripPrincipal);
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MainMenuStrip = menuStripPrincipal;
@@ -462,10 +288,6 @@
             Load += FLogin_Load;
             menuStripPrincipal.ResumeLayout(false);
             menuStripPrincipal.PerformLayout();
-            grpConn.ResumeLayout(false);
-            grpConn.PerformLayout();
-            grpAzienda.ResumeLayout(false);
-            grpAzienda.PerformLayout();
             grpAzioni.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
@@ -486,31 +308,17 @@
         private System.Windows.Forms.ToolStripMenuItem moduliToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem contrattiFatturazioneToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pagheToolStripMenuItem;
-        private System.Windows.Forms.GroupBox grpConn;
-        private System.Windows.Forms.TextBox txtServer;
-        private System.Windows.Forms.Label lblServer;
-        private System.Windows.Forms.TextBox txtUser;
-        private System.Windows.Forms.Label lblUser;
-        private System.Windows.Forms.TextBox txtPassword;
-        private System.Windows.Forms.Label lblPsw;
-        private System.Windows.Forms.TextBox txtLoginId;
-        private System.Windows.Forms.Label lblLoginId;
-        private System.Windows.Forms.Button btnTestConnection;
-        private System.Windows.Forms.GroupBox grpAzienda;
-        private System.Windows.Forms.RadioButton rdoUno;
-        private System.Windows.Forms.RadioButton rdoSpa;
-        private System.Windows.Forms.CheckBox chkTestDb;
-        private System.Windows.Forms.Label lblDbInUso;
-        private System.Windows.Forms.CheckBox chkDebug;
         private System.Windows.Forms.GroupBox grpAzioni;
-        private System.Windows.Forms.Button btnGeneraOrdini;
-        private System.Windows.Forms.Button btnAdeguamentoIstat;
-        private System.Windows.Forms.Button btnConsuntivi;
         private System.Windows.Forms.Button btnAllineaFattureOrdini;
+        private System.Windows.Forms.Button btnConsuntivi;
+        private System.Windows.Forms.Button btnAdeguamentoIstat;
+        private System.Windows.Forms.Button btnGeneraOrdini;
         private System.Windows.Forms.ListBox lstStato;
         private System.Windows.Forms.ProgressBar progressBar;
         private System.Windows.Forms.Label lblStatus;
-        private System.Windows.Forms.Button btnPulisciLog;
+        private System.Windows.Forms.Label lblDbInUso;
+        private System.Windows.Forms.Button btnPulisciStato;
         private ProgressBar subProgressBar;
+        private System.Windows.Forms.LinkLabel lnkApriLog;
     }
 }
