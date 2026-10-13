@@ -3,8 +3,8 @@
 ###############################################################################
 * text=auto
 
-#Prova sta riga per dire a github di non toccare la folder di deploy
-Deploy/** binary
+# Preserva i file ClickOnce così come generati da Visual Studio
+/Deploy/** -text
 
 ###############################################################################
 # Set default behavior for command prompt diff.
