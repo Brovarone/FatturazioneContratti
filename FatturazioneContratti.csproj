@@ -8,10 +8,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+  
+  <PropertyGroup>
+    <SatelliteResourceLanguages>it;it-IT</SatelliteResourceLanguages>
+  </PropertyGroup>
+
   <ItemGroup>
     <Folder Include="Data\Configurations\" />
     <Folder Include="Data\Models\" />
-    <Folder Include="Data\" />
   </ItemGroup>
 
   <ItemGroup>
