@@ -117,8 +117,7 @@ namespace FatturazioneContratti.Orders
             CanoneFuoriRangeDate = false;
             QtaSospesa = 0;
             SospesoDaAttivita = false;
-            QtaAnnullata = 0;
-            QtaAnnullata = 0;
+            QtaAnnullata = 0;            
             HaAnnullatoDaAttivita = false;
             DataCessazioneDaAttivita = d;
             CanoniDataIn = d;
