@@ -38,8 +38,15 @@ namespace FatturazioneContratti.Forms
 
             if (_bar.Value < _bar.Maximum)
                 _bar.Value++;
-                _bar.Value--; // <- forzo il refresha video
+
+            // Forzo il refresh a video, ma il decremento va protetto: con
+            // Minimum == Maximum (barra a un solo passo) Value-- scatenava
+            // ArgumentOutOfRangeException sul thread chiamante.
+            if (_bar.Value > _bar.Minimum)
+            {
+                _bar.Value--;
                 _bar.Value++;
+            }
         }
 
         public void Finish()
