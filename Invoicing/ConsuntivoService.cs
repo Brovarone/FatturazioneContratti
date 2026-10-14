@@ -118,8 +118,7 @@ namespace FatturazioneContratti.Invoicing
             Action<string, AppConfig.LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
-            ProgressCallbacks? progress2 = null,
-            ProgressCallbacks? progress3 = null)
+            ProgressCallbacks? progress2 = null)
         {
             var errori = new StringBuilder();
             var fatalContrattoErrorList = new List<string>();
@@ -317,8 +316,7 @@ namespace FatturazioneContratti.Invoicing
             Action<string, AppConfig.LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
-            ProgressCallbacks? progress2 = null,
-            ProgressCallbacks? progress3 = null)
+            ProgressCallbacks? progress2 = null)
         {
             var bulkMessage = new StringBuilder();
             var errori = new StringBuilder();

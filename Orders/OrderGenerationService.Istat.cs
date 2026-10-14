@@ -32,8 +32,7 @@ namespace FatturazioneContratti.Orders
             Action<string, AppConfig.LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
-            ProgressCallbacks? progress2 = null,
-            ProgressCallbacks? progress3 = null)
+            ProgressCallbacks? progress2 = null)
         {
             if (filtri.PercIstat == 0)
             {

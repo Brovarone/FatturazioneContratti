@@ -154,12 +154,12 @@ namespace FatturazioneContratti.Forms
                 using var ctx = SqlTools.CreateContext();
                 var service = new OrderGenerationService(ctx, AppConfig.LoginId);
 
-                return service.GeneraRigheOrdine(
+                return service.GeneraRigheOrdine(new GeneraRigheOrdineOptions(
                     filtri,
-                    logMessage: Log,
-                    updateStatus: AggiornaStato,
-                    progress1: CreaProgress(_progressMain),
-                    progress2: CreaProgress(_progressSub));
+                    LogMessage: Log,
+                    UpdateStatus: AggiornaStato,
+                    ProgressBlocchi: CreaProgress(_progressMain),
+                    ProgressOrdini: CreaProgress(_progressSub)));
             });
         }
 

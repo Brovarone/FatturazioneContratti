@@ -63,10 +63,22 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
 
 ## 3. Altri punti del report originale non toccati (22-25 e minimi)
 
-### Punto 22 — `OrderGenerationService.GeneraRigheOrdine` è un metodo di ~300 righe
-- Estrarre: costruzione query/filtri, elaborazione singolo contratto, creazione righe,
-  calcolo statistiche. I 4 callback + 3 `ProgressCallbacks` potrebbero diventare un
-  solo record opzioni.
+### Punto 22 — `OrderGenerationService.GeneraRigheOrdine` era un metodo di ~300 righe (COMPLETATO)
+- [x] Fase A — estrazioni a basso rischio: `ApplicaFiltriComuni` (riuso anche da
+  `AdeguaIstatOrdine`), `EstraiIdsOrdini`, `record DefaultVenditeIva` +
+  `CaricaDefaultVenditeIva`.
+- [x] Fase B — stato di elaborazione: `StatoElaborazioneOrdini` (collettori,
+  accumulatori di log, default, prototipo riga) e `StatoOrdine` (contatori per singolo
+  ordine); estratti `ElaboraOrdine` ed `ElaboraContratto`; il ciclo a blocchi è diventato
+  l'iterator locale `CaricaOrdiniPerBlocco`, speculare al workflow ISTAT.
+  Rimosso anche `iNrRigheNota` (contatore incrementato e mai letto).
+- [x] Fase C — `record GeneraRigheOrdineOptions` con firma `GeneraRigheOrdine(options)`;
+  rimosso il parametro morto `progress3` (mai usato) da `GeneraRigheOrdine`,
+  `AdeguaIstatOrdine`, `ControllaFlussoIntegra`, `GeneraFattureConsuntivo`.
+- Metodo da ~309 a ~114 righe. Nessun cambio di comportamento: try/catch, ordine delle
+  progress (blocchi/ordini) e ritorno `Errori.Length == 0` invariati.
+- **Da riverificare via UI su DB test** (casi in §4: ordine con più contratti, riga bianca
+  singola, attività da rifatturare, scadenza fissa/cessazione, >100 ordini per le progress).
 
 ### Punto 24 — warning annullabili rilevanti (dal build)
 - `Invoicing/ConsuntivoService.cs`: `Break(..., customer, ...)` può ricevere null
@@ -142,8 +154,10 @@ Nessun test automatico. Da provare via UI con DB di test:
 | A4 | Allineamento: nuova dialog `FAskFiltriAllineamentoFatture` (date da/a + radio "Tutti i numeri" / "Intervallo primo-ultimo"); firma `AdeguaFattureDaOrdini` ora riceve `FiltriAllineamentoFatture` (`AllNumbers`, `NrFirst`, `NrLast`) | `Invoicing/FattureDaOrdiniService.cs`, `Invoicing/FiltriAllineamentoFatture.cs`, `Forms/FAskFiltriAllineamentoFatture*.cs`, `Forms/FLogin.cs` |
 | 25 | Rimossi assegnamenti ridondanti (0/false) dai costruttori, default in inizializzatori di proprietà | `Orders/CurOrdRow.cs`, `Orders/CurOrd.cs`, `Invoicing/CurFatt.cs`, `Invoicing/CurFattRow.cs` |
 | 25b | `SingoloOrdine`/`NrMese` cablati nelle query consuntivo (+ `NrOrdine` in DTO e UI) | `Invoicing/ConsuntivoService.cs`, `Invoicing/FiltriOrdiniConsuntivo.cs`, `Forms/FAskFiltriOrdiniConsuntivo*.cs` |
+| 22 | `GeneraRigheOrdine` scomposto: filtri/ID/default condivisi, `StatoElaborazioneOrdini`+`StatoOrdine`, `ElaboraOrdine`/`ElaboraContratto`, iterator a blocchi, `record GeneraRigheOrdineOptions`, rimosso `progress3` | `Orders/OrderGenerationService*.cs`, `Orders/DefaultVenditeIva.cs`, `Orders/GeneraRigheOrdineOptions.cs`, `Invoicing/ConsuntivoService.cs`, `Forms/FLogin.cs` |
 
-> Le righe L1, L2, 8, 23a, 23b, 23c, A4 risultano **eseguite ma non committate** (working copy
-> del 13/10/2026) — da committare dopo build + verifica manuale §4.
+> Le righe L1, L2, 8, 22, 23a, 23b, 23c, A4 sono state **committate** il 13-14/10/2026
+> (commit su `master` + branch `feature/refactor-genera-righe-ordine`) — resta la verifica
+> manuale §4.
 
 Build: 0 errori (warning ~1820, per lo più attesi sui model generati).

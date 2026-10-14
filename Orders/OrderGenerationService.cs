@@ -31,15 +31,15 @@ namespace FatturazioneContratti.Orders
             _loginId = loginId;
         }
 
-        public bool GeneraRigheOrdine(
-            FiltriOrdini filtri,
-            int dimensioneBlocco = 100,
-            Action<string, AppConfig.LogTarget> logMessage = null,
-            Action<string> updateStatus = null,
-            ProgressCallbacks? progress1 = null,
-            ProgressCallbacks? progress2 = null,
-            ProgressCallbacks? progress3 = null)
+        public bool GeneraRigheOrdine(GeneraRigheOrdineOptions options)
         {
+            FiltriOrdini filtri = options.Filtri;
+            int dimensioneBlocco = options.DimensioneBlocco;
+            Action<string, AppConfig.LogTarget> logMessage = options.LogMessage;
+            Action<string> updateStatus = options.UpdateStatus;
+            ProgressCallbacks? progress1 = options.ProgressBlocchi;
+            ProgressCallbacks? progress2 = options.ProgressOrdini;
+
             var stato = new StatoElaborazioneOrdini(filtri, _loginId, _now);
 
             try
