@@ -3,18 +3,23 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using EFMago.Models;
 
 namespace FatturazioneContratti.Common
 {
     public static class FattureContextExtensions
     {
-        // Cache per memorizzare le funzioni di inizializzazione pre-compilate per ogni tabella
-        private static readonly ConcurrentDictionary<Type, Action<object>> Initializers =
-            new ConcurrentDictionary<Type, Action<object>>();
+        // Cache degli inizializzatori a due livelli: MODELLO EF -> Tipo entità.
+        // Chiavare sul solo tipo faceva riusare al primo contesto visto i default
+        // (HasDefaultValueSql) di quel modello anche quando in-process ne compare un
+        // altro: i default applicati risultavano sbagliati, o restava un no-op se il
+        // tipo non era presente nel primo modello.
+        private static readonly ConcurrentDictionary<IModel, ConcurrentDictionary<Type, Action<object>>> Initializers =
+            new ConcurrentDictionary<IModel, ConcurrentDictionary<Type, Action<object>>>();
 
         /// <summary>
-        /// Crea una nuova istanza di un'entità (valida per le 116 tabelle) inizializzandola 
+        /// Crea una nuova istanza di un'entità (valida per le 116 tabelle) inizializzandola
         /// con i default reali dichiarati nella Fluent API (HasDefaultValueSql) del contesto.
         /// Replica esattamente il comportamento del metodo AddNew dei DataSet VB.NET.
         /// </summary>
@@ -22,10 +27,15 @@ namespace FatturazioneContratti.Common
         {
             var entity = new TEntity();
 
+            // Il modello è reference-stabile per tipo di context (ModelCacheKeyFactory di default):
+            // usarlo come chiave garantisce un set di inizializzatori dedicato a ciascun modello.
+            var model = context.Model;
+            var perModello = Initializers.GetOrAdd(model, _ => new ConcurrentDictionary<Type, Action<object>>());
+
             // Recupera o compila l'inizializzatore specifico per questo tipo di classe
-            var initializer = Initializers.GetOrAdd(typeof(TEntity), type =>
+            var initializer = perModello.GetOrAdd(typeof(TEntity), type =>
             {
-                var entityType = context.Model.FindEntityType(type);
+                var entityType = model.FindEntityType(type);
                 if (entityType == null) return _ => { };
 
                 var propertiesWithDefaults = entityType.GetProperties()

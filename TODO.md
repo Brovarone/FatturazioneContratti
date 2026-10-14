@@ -101,8 +101,9 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   `Orders/CurOrd.cs`, `Invoicing/CurFatt.cs` (`SaleDocId`/`Cliente` ai default CLR),
   `Invoicing/CurFattRow.cs` (`IsOk = true` in inizializzatore). `QtaAnnullata = 0`
   duplicato eliminato. Nessun cambio di comportamento (solo 0/false già default).
-- `Common/FattureContextExtensions.cs`: cache `Initializers` legata al primo DbContext
-  usato (trabocchetto latente se in-process compaiono contesti diversi).
+- [x] `Common/FattureContextExtensions.cs`: cache `Initializers` ora a due livelli
+  `IModel -> Type` (prima solo `Type`, quindi legata al primo DbContext visto:
+  applicava i default del primo modello a contesti con modello diverso).
 - `Invoicing/FattureDaOrdiniService.cs`: noto, SQL raw, fuori Scope sessione.
 
 ---
