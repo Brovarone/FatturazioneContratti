@@ -158,11 +158,8 @@ namespace FatturazioneContratti.Forms
                     filtri,
                     logMessage: Log,
                     updateStatus: AggiornaStato,
-                    progress1: new ProgressCallbacks(
-                        (min, max) => _progressMain?.Init(min, max), 
-                        () => _progressMain?.Advance(), 
-                        () => _progressMain?.Finish()),
-                    progress2: new ProgressCallbacks((min, max) => _progressSub?.Init(min, max), () => _progressSub?.Advance(), () => _progressSub?.Finish()));
+                    progress1: CreaProgress(_progressMain),
+                    progress2: CreaProgress(_progressSub));
             });
         }
 
@@ -188,14 +185,8 @@ namespace FatturazioneContratti.Forms
                     filtri,
                     logMessage: Log,
                     updateStatus: AggiornaStato,
-                    progress1: new ProgressCallbacks(
-                        (min, max) => _progressMain?.Init(min, max),
-                        () => _progressMain?.Advance(),
-                        () => _progressMain?.Finish()),
-                    progress2: new ProgressCallbacks(
-                        (min, max) => _progressSub?.Init(min, max),
-                        () => _progressSub?.Advance(),
-                        () => _progressSub?.Finish()));
+                    progress1: CreaProgress(_progressMain),
+                    progress2: CreaProgress(_progressSub));
             });
         }
 
@@ -222,14 +213,8 @@ namespace FatturazioneContratti.Forms
                         filtri,
                         Log,
                         AggiornaStato,
-                        new ProgressCallbacks(
-                            (min, max) => _progressMain?.Init(min, max),
-                            () => _progressMain?.Advance(),
-                            () => _progressMain?.Finish()),
-                        new ProgressCallbacks(
-                            (min, max) => _progressSub?.Init(min, max),
-                            () => _progressSub?.Advance(),
-                            () => _progressSub?.Finish())
+                        CreaProgress(_progressMain),
+                        CreaProgress(_progressSub)
                         );
 
                     if (!checkOk)
@@ -251,14 +236,8 @@ namespace FatturazioneContratti.Forms
                         filtri,
                         Log,
                         AggiornaStato,
-                        new ProgressCallbacks(
-                            (min, max) => _progressMain?.Init(min, max),
-                            () => _progressMain?.Advance(),
-                            () => _progressMain?.Finish()),
-                        new ProgressCallbacks(
-                            (min, max) => _progressSub?.Init(min, max),
-                            () => _progressSub?.Advance(),
-                            () => _progressSub?.Finish()));
+                        CreaProgress(_progressMain),
+                        CreaProgress(_progressSub));
                 }
 
                 Log("--- Step 2: Saltato (Solo Controllo selezionato) ---");
@@ -296,6 +275,15 @@ namespace FatturazioneContratti.Forms
         }
 
         // --- METODI DI SUPPORTO UI ---
+        /// <summary>
+        /// Factory centralizzata per i callback di avanzamento legati alle barre UI.
+        /// Evita di ripetere la costruzione di <see cref="ProgressCallbacks"/> in ogni workflow.
+        /// </summary>
+        private ProgressCallbacks CreaProgress(UiProgress? barra) => new(
+            (min, max) => barra?.Init(min, max),
+            () => barra?.Advance(),
+            () => barra?.Finish());
+
         private void EseguiOperazione(string nomeProcesso, Func<bool> azione)
         {
             if (_inElaborazione) return;   // protezione extra contro doppi avvii

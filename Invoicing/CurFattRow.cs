@@ -7,7 +7,7 @@ namespace FatturazioneContratti.Invoicing
     public class CurFattRow
     {
         public int SaleDocId { get; set; }
-        public bool IsOk { get; set; }
+        public bool IsOk { get; set; } = true;
         public short Line { get; set; }
         public string Contropartita { get; set; } = string.Empty;
         public string CodIva { get; set; } = string.Empty;
@@ -24,11 +24,9 @@ namespace FatturazioneContratti.Invoicing
 
         public CurFattRow()
         {
+            // SaleDocId/Line/NrCanoni restano ai default CLR (0); PercIva è double?
+            // e lo 0 è un valore intenzionale, non il default null.
             DateTime d = DateTime.Today;
-            SaleDocId = 0;
-            IsOk = true;
-            Line = 0;
-            NrCanoni = 0;
             CanoniDataIn = d;
             CanoniDataFin = d;
             PercIva = 0;
@@ -48,7 +46,6 @@ namespace FatturazioneContratti.Invoicing
         public CurFattRow(AllordCliContrattoDistintaServAgg s) : this()
         {
             DateTime d = DomainConstants.DataNulla;
-            Line = 0;
             NrCanoni = s.Qta ?? 0;
             CanoniDataIn = d;
             CanoniDataFin = d;

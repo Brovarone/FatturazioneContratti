@@ -29,9 +29,9 @@ namespace FatturazioneContratti.Invoicing
 
         public CurFatt()
         {
+            // SaleDocId/Cliente restano ai default CLR (0/null); LastLine/LastSubId/PercIva
+            // sono int?/double? e lo 0 è un valore intenzionale, non il default null.
             DateTime d = DateTime.Today;
-            SaleDocId = 0;
-            Cliente = null;
             DataFattura = d;
             LastLine = 0;
             LastSubId = 0;

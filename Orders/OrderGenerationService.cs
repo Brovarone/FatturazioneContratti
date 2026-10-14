@@ -759,7 +759,7 @@ namespace FatturazioneContratti.Orders
             riga.AllCanoniDataI = dataInizio;
             riga.AllCanoniDataF = dataFine;
             riga.Invoiced = "0";
-            riga.Notes = SubstringSafe(aDaRif.Nota, 32);
+            riga.Notes = StringHelpers.SubstringSafe(aDaRif.Nota, 32);
             riga.Job = cOrd.Commessa;
             riga.CostCenter = cOrd.CdC;
             riga.ContractCode = cOrd.CIG;
@@ -854,7 +854,7 @@ namespace FatturazioneContratti.Orders
             riga.AllCanoniDataI = cOrdRow.PeriodoDataIn;
             riga.AllCanoniDataF = cOrdRow.PeriodoDataFin;
             riga.Invoiced = "0";
-            riga.Notes = SubstringSafe(c.Nota, 32);
+            riga.Notes = StringHelpers.SubstringSafe(c.Nota, 32);
             riga.Job = cOrd.Commessa;
             riga.CostCenter = cOrd.CdC;
             riga.ContractCode = cOrd.CIG;
@@ -880,13 +880,6 @@ namespace FatturazioneContratti.Orders
                 return true;
 
             return false;
-        }
-
-        private static string SubstringSafe(string val, int maxLen)
-        {
-            if (string.IsNullOrEmpty(val)) return string.Empty;
-            string t = val.Trim();
-            return t.Length <= maxLen ? t : t.Substring(0, maxLen);
         }
 
         #endregion

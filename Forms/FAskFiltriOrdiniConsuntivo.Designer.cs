@@ -41,6 +41,8 @@
             DtpDataFattura = new DateTimePicker();
             ChkFiliale = new CheckBox();
             CmbFiliale = new ComboBox();
+            ChkSingoloOrdine = new CheckBox();
+            TxtNrOrdine = new TextBox();
             TableLayoutPanelButtons.SuspendLayout();
             GrpInterventiFilter.SuspendLayout();
             GrpAzione.SuspendLayout();
@@ -54,7 +56,7 @@
             TableLayoutPanelButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             TableLayoutPanelButtons.Controls.Add(OK_Button, 0, 0);
             TableLayoutPanelButtons.Controls.Add(Cancel_Button, 1, 0);
-            TableLayoutPanelButtons.Location = new Point(220, 420);
+            TableLayoutPanelButtons.Location = new Point(220, 448);
             TableLayoutPanelButtons.Margin = new Padding(4, 3, 4, 3);
             TableLayoutPanelButtons.Name = "TableLayoutPanelButtons";
             TableLayoutPanelButtons.RowCount = 1;
@@ -315,13 +317,34 @@
             CmbFiliale.Size = new Size(200, 23);
             CmbFiliale.TabIndex = 4;
             // 
+            // ChkSingoloOrdine
+            // 
+            ChkSingoloOrdine.AutoSize = true;
+            ChkSingoloOrdine.Location = new Point(12, 351);
+            ChkSingoloOrdine.Name = "ChkSingoloOrdine";
+            ChkSingoloOrdine.Size = new Size(105, 19);
+            ChkSingoloOrdine.TabIndex = 5;
+            ChkSingoloOrdine.Text = "Singolo Ordine";
+            ChkSingoloOrdine.UseVisualStyleBackColor = true;
+            ChkSingoloOrdine.CheckedChanged += ChkSingoloOrdine_CheckedChanged;
+            // 
+            // TxtNrOrdine
+            // 
+            TxtNrOrdine.Enabled = false;
+            TxtNrOrdine.Location = new Point(120, 349);
+            TxtNrOrdine.Name = "TxtNrOrdine";
+            TxtNrOrdine.Size = new Size(96, 23);
+            TxtNrOrdine.TabIndex = 6;
+            // 
             // FAskFiltriOrdiniConsuntivo
             // 
             AcceptButton = OK_Button;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = Cancel_Button;
-            ClientSize = new Size(394, 465);
+            ClientSize = new Size(394, 493);
+            Controls.Add(TxtNrOrdine);
+            Controls.Add(ChkSingoloOrdine);
             Controls.Add(CmbFiliale);
             Controls.Add(ChkFiliale);
             Controls.Add(GrpAzione);
@@ -371,5 +394,7 @@
         internal DateTimePicker DtpDataFattura;
         internal CheckBox ChkFiliale;
         internal ComboBox CmbFiliale;
+        internal CheckBox ChkSingoloOrdine;
+        internal TextBox TxtNrOrdine;
     }
 }

@@ -137,7 +137,12 @@ namespace FatturazioneContratti.Invoicing
                     .Where(wsa => wsa.Servizio != TecnoAll1 && wsa.Servizio != EstateSicura)
                     .Include(o => o.AllordCliContratto)
                         .ThenInclude(ord => ord.SaleOrd)
-                            .ThenInclude(info => info.ALLOrdCliAcc);                                           
+                            .ThenInclude(info => info.ALLOrdCliAcc);
+
+                // Filtro singolo ordine (FiltriOrdiniConsuntivo.SingoloOrdine/NrOrdine):
+                // restringe le distinte candidate; gli interventi si agganciano solo a queste.
+                if (filtri.SingoloOrdine && !string.IsNullOrWhiteSpace(filtri.NrOrdine))
+                    distintaQuery = distintaQuery.Where(wsa => wsa.AllordCliContratto.SaleOrd.InternalOrdNo == filtri.NrOrdine);                                           
 
                 var allDistinte = distintaQuery
                     .Select(x => new MiniDistinta
@@ -168,6 +173,12 @@ namespace FatturazioneContratti.Invoicing
                 }
 
                 if (filtri.SingolaFiliale) intQuery = intQuery.Where(o => o.Filiale == filtri.Filiale);
+
+                // NrMese (mese selezionato in UI): in modalità MeseAnno ribadisce il range date
+                if (filtri.InterventiFilter == InterventiFilterMode.MeseAnno
+                    && int.TryParse(filtri.NrMese, out int meseFiltro)
+                    && meseFiltro >= 1 && meseFiltro <= 12)
+                    intQuery = intQuery.Where(o => o.InizioAllarme.HasValue && o.InizioAllarme.Value.Month == meseFiltro);
 
                 var allInterventi = intQuery.ToList();
                 if (!allInterventi.Any())
@@ -340,9 +351,21 @@ namespace FatturazioneContratti.Invoicing
                     intFiltrati = intFiltrati.Where(o => o.Filiale == filtri.Filiale);
                 }
 
+                // NrMese (mese selezionato in UI): in modalità MeseAnno ribadisce il range date
+                if (filtri.InterventiFilter == InterventiFilterMode.MeseAnno
+                    && int.TryParse(filtri.NrMese, out int meseFiltro)
+                    && meseFiltro >= 1 && meseFiltro <= 12)
+                {
+                    intFiltrati = intFiltrati.Where(o => o.InizioAllarme.HasValue && o.InizioAllarme.Value.Month == meseFiltro);
+                }
+
                 var interventiList = intFiltrati.ToList();
                 // Gli ID si ricavano dalla lista già materializzata: la query non va eseguita due volte.
                 int[] aOrdini = interventiList.Select(s => s.MIdOrdCli ?? 0).Where(id => id > 0).Distinct().ToArray();
+
+                // Filtro singolo ordine (FiltriOrdiniConsuntivo.SingoloOrdine/NrOrdine):
+                // flag valutato in C# così il Where resta un'espressione traducibile in SQL.
+                bool soloOrdine = filtri.SingoloOrdine && !string.IsNullOrWhiteSpace(filtri.NrOrdine);
 
                 var ordiniList = _ordiniCntx.MaSaleOrd
                     .Include(o => o.ALLordCliContratto)
@@ -358,6 +381,8 @@ namespace FatturazioneContratti.Invoicing
                     .Include(o => o.ALLOrdCliAcc)
                     .Include(o => o.ALLOrdCliFattEle)
                     .Where(o => aOrdini.Contains(o.SaleOrdId))
+                    // Filtro singolo ordine (FiltriOrdiniConsuntivo.SingoloOrdine/NrOrdine)
+                    .Where(o => !soloOrdine || o.InternalOrdNo == filtri.NrOrdine)
                     .OrderBy(o => o.InvoicingCustomer)
                     .ThenBy(o => o.ContractCode)
                     .ThenBy(o => o.Payment)
@@ -542,7 +567,7 @@ namespace FatturazioneContratti.Invoicing
                                             TotalAmount = total,
                                             AllNrCanoni = (int)qty,
                                             Invoiced = "0",
-                                            Notes = c.Nota != null && c.Nota.Length > 32 ? c.Nota.Substring(0, 32) : c.Nota,
+                                            Notes = StringHelpers.SubstringSafe(c.Nota, 32),
                                             CustSupp = cFattura.CodCliente,
                                             CustSuppType = 3211264,
                                             DocumentDate = cFattura.DataFattura,

@@ -52,34 +52,12 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   Sospensione + Annullamento/Istat? Se sì è un bug (viene ignorata).
 - Fix probabile: `if/else if` espliciti invece di `continue`.
 
-### Punto 6 — causale attività ISTAT dalla UI ignorata
-- File: `Orders/OrderGenerationService.Istat.cs:272` → `Attivita = "ISTAT"` hardcoded
-- Il campo `TxtIstatAttivita` della dialog (`Forms/FAskFiltriOrdini.cs`) popola
-  `FiltriOrdini.CausaleAttivita`, che viene loggato ma **mai usato**: se l'utente
-  cambia causale non ha effetto.
-- Decidere: usare `filtri.CausaleAttivita` (con fallback "ISTAT" se vuoto) oppure
-  togliere il campo dalla UI.
-
 ### Punto 19 — log diagnostici mai emessi
 - `debugging` e `avvisi` (StringBuilder) popolati in tutti i workflow e mai
   scaricati su log/UI. Esempi di messaggi persi:
   - `OrderGenerationService.cs`: "data prossima fatturazione antecedente...", tutte le `[ESCLUSA]`
   - `OrderGenerationService.Istat.cs`: "riga di adeguamento Istat già presente per l'anno...", "scadenza fissa. Controllare canoni!"
 - Da concordare con le decisioni del punto 1 (questa sessione).
-
-### Punto 8 — robustezza UI (COMPLETATO)
-- `Forms/FLogin.cs`: helper `PostToUi` con `IsHandleCreated`/`IsDisposed` +
-  `BeginInvoke` in try/catch, `_inElaborazione` volatile, `EseguiOperazione` usa
-  `PostToUi`; `AggiornaStato` reso sicuro (guardie handle + try/catch sul
-  `BeginInvoke`); `SetUiBusy` reso sicuro (`IsDisposed`/`IsHandleCreated`,
-  `Invoke` in try/catch). Stato del testo UI non esplode più a form chiusa.
-- `Program.cs`: gestori globali (`Application.ThreadException`,
-  `AppDomain.UnhandledException`, `TaskScheduler.UnobservedTaskException`) con
-  `SetObserved()` e wrap di `Application.Run` in try/catch.
-- `Common/CrashLogger.cs`: scrive `crash_yyyyMMdd_HHmmss_fff.log` (stack trace,
-  contesto thread/DB/eseguibile, fallback AppData).
-- Build: 0 errori / 0 avvisi. File ancora da committare aggiungere a git:
-  `Common/CrashLogger.cs`.
 
 ---
 
@@ -90,13 +68,6 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   calcolo statistiche. I 4 callback + 3 `ProgressCallbacks` potrebbero diventare un
   solo record opzioni.
 
-### Punto 23 — duplicazioni
-- [x] `CreaRigaDescrittiva` / `CreaRigaRiferimento` (`OrderGenerationService.cs`) unificate
-  in `CreaRigaNota(..., LineType, ...)` — modifica non committata, da riverificare in build/test.
-- [ ] `SubstringSafe` (`OrderGenerationService.cs`) duplicato inline in `ConsuntivoService.cs`
-  (`Invoicing/ConsuntivoService.cs:545`, ternario su `c.Nota` troncata a 32) → helper comune.
-- [ ] Creazione dei `ProgressCallbacks` ripetuta 4 volte in `Forms/FLogin.cs` → factory.
-
 ### Punto 24 — warning annullabili rilevanti (dal build)
 - `Invoicing/ConsuntivoService.cs`: `Break(..., customer, ...)` può ricevere null
   (warning CS8604) → annotare firme.
@@ -105,10 +76,19 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   (`logMessage` null-passabile).
 
 ### Punto 25 — dettagli minori
-- `Forms/FAskFiltriOrdini.cs`: `using System.Windows.Forms;` duplicato (righe 6 e 12).
-- `Invoicing/FiltriOrdiniConsuntivo.cs`: `SingoloOrdine`/`NrMese` non usati dal servizio.
-- `Orders/CurOrdRow.cs`: `QtaAnnullata = 0;` duplicato nel costruttore; inizializzazioni
-  ridondanti vs. inizializzatori di proprietà (stesso pattern in CurOrd/CurFatt/CurFattRow).
+- `Invoicing/FiltriOrdiniConsuntivo.cs`: [x] RISOLTO 14/10/2026 — `SingoloOrdine`/`NrMese`
+  ora usati nelle query di estrazione (`Invoicing/ConsuntivoService.cs`):
+  nuovo `NrOrdine` nel DTO + checkbox/casella in `FAskFiltriOrdiniConsuntivo`
+  (con validazione); controllo-flusso filtra le distinte per `InternalOrdNo`,
+  fatturazione filtra `ordiniList` (flag `soloOrdine` valutato in C# per restare
+  traducibile in SQL); `NrMese` aggiunge predicato `Month` in modalità `MeseAnno`.
+- `Orders/CurOrdRow.cs`: [x] RISOLTO 14/10/2026 — inizializzazioni ridondanti
+  rimosse, default costanti spostati in inizializzatori di proprietà
+  (`IsOk = true`, `string.Empty`, `TipologiaServizio = Canone`); nei costruttori
+  restano solo le date e i valori letti da riga. Stesso pattern applicato a
+  `Orders/CurOrd.cs`, `Invoicing/CurFatt.cs` (`SaleDocId`/`Cliente` ai default CLR),
+  `Invoicing/CurFattRow.cs` (`IsOk = true` in inizializzatore). `QtaAnnullata = 0`
+  duplicato eliminato. Nessun cambio di comportamento (solo 0/false già default).
 - `Common/FattureContextExtensions.cs`: cache `Initializers` legata al primo DbContext
   usato (trabocchetto latente se in-process compaiono contesti diversi).
 - `Invoicing/FattureDaOrdiniService.cs`: noto, SQL raw, fuori Scope sessione.
@@ -138,6 +118,7 @@ Nessun test automatico. Da provare via UI con DB di test:
 | 2 | Riga attività ISTAT con pattern prototipo `AddNew` | `Orders/OrderGenerationService.Istat.cs` |
 | 4 | Testa fattura/cross-ref/ritenuta solo se il gruppo ha righe; ID documento assegnato alla prima riga utile | `Invoicing/ConsuntivoService.cs` |
 | 5 | `MaIdnumbers.FirstOrDefault` + errore esplicito | `Invoicing/ConsuntivoService.cs` |
+| 6 | Causale attività ISTAT dalla UI (`TxtIstatAttivita` → `FiltriOrdini.CausaleAttivita`) con fallback `CausaleAttivitaIstatDefault = "ISTAT"` | `Orders/OrderGenerationService.Istat.cs`, `Forms/FAskFiltriOrdini.cs`, `Orders/FiltriOrdini.cs` |
 | 7 | `TbcreatedId/TbmodifiedId = _loginId` su righe descrittive fattura | `Invoicing/ConsuntivoService.cs` |
 | 9 | `aOrdini` da lista già materializzata (no doppia query) | `Invoicing/ConsuntivoService.cs` |
 | 10 | Rimosso `.Load()` duplicato su MaCustSupp | `Invoicing/ConsuntivoService.cs` |
@@ -154,11 +135,15 @@ Nessun test automatico. Da provare via UI con DB di test:
 | — | Esito finale su `lblStatus` (verde/rosso) + LinkLabel "Apri file di log" | `Forms/FLogin.cs` |
 | L1 | `LogMode` default `Both` + persistenza `Load`/`Save`/`ConfigData` + combo in `FSettings` | `Config/AppConfig.cs`, `Forms/FSettings.cs` (+Designer) |
 | L2 | `FLogin.Log(string)` instrada su `LogMode`; file di log creato (anche vuoto) in `FLogin_Load` | `Forms/FLogin.cs` |
-| 8 | `PostToUi` + `_inElaborazione` volatile; handler globali eccezioni + `CrashLogger` (untracked) | `Forms/FLogin.cs`, `Program.cs`, `Common/CrashLogger.cs` |
+| 8 | `PostToUi` + `_inElaborazione` volatile; handler globali eccezioni + `CrashLogger` | `Forms/FLogin.cs`, `Program.cs`, `Common/CrashLogger.cs` |
 | 23a | `CreaRigaDescrittiva`/`CreaRigaRiferimento` unificate in `CreaRigaNota` | `Orders/OrderGenerationService.cs` |
+| 23c | `SubstringSafe` estratto in `Common/StringHelpers` (rimosso privato + ternario inline in consuntivo) | `Common/StringHelpers.cs`, `Orders/OrderGenerationService.cs`, `Invoicing/ConsuntivoService.cs` |
+| 23b | `ProgressCallbacks` centralizzati in factory `FLogin.CreaProgress` | `Forms/FLogin.cs` |
 | A4 | Allineamento: nuova dialog `FAskFiltriAllineamentoFatture` (date da/a + radio "Tutti i numeri" / "Intervallo primo-ultimo"); firma `AdeguaFattureDaOrdini` ora riceve `FiltriAllineamentoFatture` (`AllNumbers`, `NrFirst`, `NrLast`) | `Invoicing/FattureDaOrdiniService.cs`, `Invoicing/FiltriAllineamentoFatture.cs`, `Forms/FAskFiltriAllineamentoFatture*.cs`, `Forms/FLogin.cs` |
+| 25 | Rimossi assegnamenti ridondanti (0/false) dai costruttori, default in inizializzatori di proprietà | `Orders/CurOrdRow.cs`, `Orders/CurOrd.cs`, `Invoicing/CurFatt.cs`, `Invoicing/CurFattRow.cs` |
+| 25b | `SingoloOrdine`/`NrMese` cablati nelle query consuntivo (+ `NrOrdine` in DTO e UI) | `Invoicing/ConsuntivoService.cs`, `Invoicing/FiltriOrdiniConsuntivo.cs`, `Forms/FAskFiltriOrdiniConsuntivo*.cs` |
 
-> Le righe L1, L2, 8, 23a, A4 risultano **eseguite ma non committate** (working copy
+> Le righe L1, L2, 8, 23a, 23b, 23c, A4 risultano **eseguite ma non committate** (working copy
 > del 13/10/2026) — da committare dopo build + verifica manuale §4.
 
 Build: 0 errori (warning ~1820, per lo più attesi sui model generati).

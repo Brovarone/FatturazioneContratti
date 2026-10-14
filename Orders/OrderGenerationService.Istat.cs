@@ -14,6 +14,13 @@ namespace FatturazioneContratti.Orders
     public partial class OrderGenerationService
     {
         /// <summary>
+        /// Causale attività usata per le righe di adeguamento ISTAT quando
+        /// <see cref="FiltriOrdini.CausaleAttivita"/> è vuota (fallback UI).
+        /// Deve esistere in ALLAttivita con flag Istat = "1".
+        /// </summary>
+        private const string CausaleAttivitaIstatDefault = "ISTAT";
+
+        /// <summary>
         /// Rivaluta le righe contratto in base alla percentuale ISTAT specificata nei filtri,
         /// aggiorna il valore unitario rivalutato (ValUnitIstat), adegua le eventuali attività sospese
         /// e genera le nuove righe di attività "ISTAT" su ALLOrdCliAttivita.
@@ -98,6 +105,11 @@ namespace FatturazioneContratti.Orders
                 var efAllordCliAttivita = new List<AllordCliAttivita>();
                 var efAllordCliContratto = new List<AllordCliContratto>();
 
+                // Punto 6: la causale arriva dalla UI (TxtIstatAttivita -> FiltriOrdini.CausaleAttivita).
+                // Fallback alla costante se l'utente la lascia vuota.
+                string causaleAttivitaIstat = string.IsNullOrWhiteSpace(filtri.CausaleAttivita)
+                    ? CausaleAttivitaIstatDefault
+                    : filtri.CausaleAttivita.Trim();
                 // -------------------------------------------------------------------------
                 // STEP 2: CICLO A BLOCCHI SULLA LISTA DI ID (loader condiviso con GeneraRigheOrdine,
                 // include anche le attività di testa necessarie a curLastLineAtt).
@@ -300,7 +312,7 @@ namespace FatturazioneContratti.Orders
                             var rAtt = _context.AddNew<AllordCliAttivita>();
                             rAtt.IdOrdCli = cOrd.SaleOrdId;
                             rAtt.Line = (short)(curLastLineAtt + iNewRowsAttCount);
-                            rAtt.Attivita = "ISTAT";
+                            rAtt.Attivita = causaleAttivitaIstat;
                             rAtt.DataInizio = filtri.DataDecorrenza;
                             rAtt.DataFine = DomainConstants.DataNulla;
                             rAtt.DaFatturare = "1";

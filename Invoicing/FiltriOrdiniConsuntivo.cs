@@ -22,6 +22,7 @@ namespace FatturazioneContratti.Invoicing
         public DateTime FromInterventiDate { get; set; }
         public DateTime ToInterventiDate { get; set; }
         public bool SingoloOrdine { get; set; }
+        public string NrOrdine { get; set; } = string.Empty;
         public string NrMese { get; set; } = string.Empty;
         public DateTime DataFattura { get; set; }
         public bool SingolaFiliale { get; set; }
@@ -42,6 +43,7 @@ namespace FatturazioneContratti.Invoicing
             LogFiltri.AppendLine($"Azione: {Azione}");
             LogFiltri.AppendLine($"Data Fattura: {DataFattura:d}");
             LogFiltri.AppendLine($"Filiale : {(SingolaFiliale ? Filiale : "TUTTI")}");
+            LogFiltri.AppendLine($"Ordine : {(SingoloOrdine ? NrOrdine : "TUTTI")}");
             LogFiltri.AppendLine($"Riassegna : {Riassegna}");
         }
     }

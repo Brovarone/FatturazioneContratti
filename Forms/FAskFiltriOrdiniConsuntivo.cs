@@ -101,6 +101,12 @@ namespace FatturazioneContratti.Forms
                 return;
             }
 
+            if (ChkSingoloOrdine.Checked && string.IsNullOrWhiteSpace(TxtNrOrdine.Text))
+            {
+                MessageBox.Show("Specificare il numero ordine.", "Attenzione", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             if ((RadAzioneControlloFattura.Checked || RadAzioneSoloFattura.Checked) && DtpDataFattura.Value.Date < new DateTime(2000, 1, 1))
             {
                 MessageBox.Show("Specificare una Data Fattura valida.", "Attenzione", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -150,6 +156,11 @@ namespace FatturazioneContratti.Forms
         private void ChkFiliale_CheckedChanged(object sender, EventArgs e)
         {
             CmbFiliale.Enabled = ChkFiliale.Checked;
+        }
+
+        private void ChkSingoloOrdine_CheckedChanged(object sender, EventArgs e)
+        {
+            TxtNrOrdine.Enabled = ChkSingoloOrdine.Checked;
         }
 
         private void CalcolaDateDaMeseAnno()
@@ -240,6 +251,8 @@ namespace FatturazioneContratti.Forms
                 // Filtri aggiuntivi
                 SingolaFiliale = ChkFiliale.Checked,
                 Filiale = CmbFiliale.SelectedValue?.ToString() ?? string.Empty,
+                SingoloOrdine = ChkSingoloOrdine.Checked,
+                NrOrdine = TxtNrOrdine.Text.Trim(),
 
                 // Campi legacy per compatibilità
                 NrMese = (CmbMonth.SelectedIndex + 1).ToString(),

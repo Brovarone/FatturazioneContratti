@@ -20,11 +20,11 @@ namespace FatturazioneContratti.Orders
     /// </summary>
     public class CurOrdRow
     {
-        public bool IsOk { get; set; }
+        public bool IsOk { get; set; } = true; // Usata anche per aggiornare data prossima fatturazione
         public short Line { get; set; }
-        public string Item { get; set; }
-        public string Description { get; set; }
-        public string UoM { get; set; }
+        public string Item { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string UoM { get; set; } = string.Empty;
         public double ValUnit { get; set; }
         public DateTime DataDecorrenza { get; set; }
         public DateTime DataProssimaFattura { get; set; }
@@ -78,13 +78,13 @@ namespace FatturazioneContratti.Orders
         /// <summary>Se true la data di Scadenza fissa è congrua con l'estrazione.</summary>
         public bool HaScadenzaFissa { get; set; }
         public DateTime DataScadenzaFissa { get; set; }
-        public string CodIva { get; set; }
+        public string CodIva { get; set; } = string.Empty;
         public double PercIva { get; set; }
-        public string Contropartita { get; set; }
+        public string Contropartita { get; set; } = string.Empty;
         public CurOrd Parent { get; set; }
-        public string ContrattoFox { get; set; }
-        public string CodiceIntegra { get; set; }
-        public FatturazioneContratti.Common.TipologiaServizio TipologiaServizio { get; set; }
+        public string ContrattoFox { get; set; } = string.Empty;
+        public string CodiceIntegra { get; set; } = string.Empty;
+        public FatturazioneContratti.Common.TipologiaServizio TipologiaServizio { get; set; } = FatturazioneContratti.Common.TipologiaServizio.Canone;
 
         // Da qua sono per i servizi aggiuntivi
         public int AnnoIntervento { get; set; }
@@ -95,55 +95,23 @@ namespace FatturazioneContratti.Orders
 
         public CurOrdRow()
         {
+            // I default CLR (0/false) e gli inizializzatori di proprietà (string.Empty,
+            // IsOk = true, TipologiaServizio = Canone) coprono già tutto il resto:
+            // qui restano solo le date, che richiedono un valore calcolato.
             var d = DateTime.Today;
-            IsOk = true; // Usata anche per aggiornare data prossima fatturazione
-            Line = 0;
-            Item = string.Empty;
-            Description = string.Empty;
-            UoM = string.Empty;
-            ValUnit = 0;
             DataDecorrenza = d;
             DataProssimaFattura = d;
             DataProssimaFatturaCampagna = d;
             DataPrevistaConsegna = d;
             DataConfermaConsegna = d;
-            QtaOrdine = 0;
-            NrCanoniIniziale = 0;
-            QtaCorrente = 0;
-            QtaFranchigia = 0;
-            QtaDaRifatturare = 0;
-            DaRifatturare = false;
             DataProssimaRifatturazione = d;
-            CanoneFuoriRangeDate = false;
-            QtaSospesa = 0;
-            SospesoDaAttivita = false;
-            QtaAnnullata = 0;            
-            HaAnnullatoDaAttivita = false;
             DataCessazioneDaAttivita = d;
             CanoniDataIn = d;
             CanoniDataFin = d;
             PeriodoDataIn = d;
             PeriodoDataFin = d;
-            IsCanone = false;
-            IsConsuntivo = false;
-            IsUnaTantum = false;
-            IsAConsumo = false;
-            IsContinuativo = false;
-            IsCampagna = false;
-            PrecendementeCessato = false;
             DataCessazione = DomainConstants.DataNulla;
             DataScadenzaFissa = DomainConstants.DataNulla;
-            Contropartita = string.Empty;
-            CodIva = string.Empty;
-            PercIva = 0;
-            TipologiaServizio = FatturazioneContratti.Common.TipologiaServizio.Canone;
-            AnnoIntervento = 0;
-            NrInterventiFranchigia = 0;
-            NrInterventiPeriodo = 0;
-            NrInterventiMese = 0;
-            NrInterventiOltreFranchigia = 0;
-            ContrattoFox = string.Empty;
-            CodiceIntegra = string.Empty;
         }
 
         /// <summary>Popola la classe a partire da una riga contratto (ex New(c As AllordCliContratto)).</summary>
@@ -152,7 +120,8 @@ namespace FatturazioneContratti.Orders
             DateTime nextDate = c.DataProssimaFatt ?? DomainConstants.DataNulla;
             DateTime d = DomainConstants.DataNulla;
 
-            IsOk = true;
+            // Solo i valori letti da riga/tipo riga: i default (0/false/string.Empty,
+            // IsOk = true) arrivano già da inizializzatori + this().
             Line = c.Line;
             Item = c.Servizio;
             Description = c.Descrizione;
@@ -164,17 +133,9 @@ namespace FatturazioneContratti.Orders
             DataPrevistaConsegna = nextDate;
             DataConfermaConsegna = nextDate;
             QtaOrdine = Math.Round(c.Qta ?? 0, DomainConstants.DecimaliPercentuale);
-            NrCanoniIniziale = 0;
             QtaCorrente = Math.Round(c.Qta ?? 0, DomainConstants.DecimaliPercentuale);
             QtaFranchigia = Math.Round(c.Franchigia ?? 0, DomainConstants.DecimaliPercentuale);
-            QtaDaRifatturare = 0;
-            DaRifatturare = false;
             DataProssimaRifatturazione = d;
-            CanoneFuoriRangeDate = false;
-            QtaSospesa = 0;
-            SospesoDaAttivita = false;
-            QtaAnnullata = 0;
-            HaAnnullatoDaAttivita = false;
             DataCessazioneDaAttivita = d;
             CanoniDataIn = d;
             CanoniDataFin = d;
@@ -194,17 +155,6 @@ namespace FatturazioneContratti.Orders
             // semantica, ma vale la pena controllare sui dati reali cosa contiene davvero
             // questo campo (es. "-1"/"0", "S"/"N", vuoto...) prima di fidarsi ciecamente.
             IsCampagna = VbStyleToBool(tipoRiga.Campagna);
-            PrecendementeCessato = false;
-            DataCessazione = d;
-            DataScadenzaFissa = d;
-            Contropartita = string.Empty;
-            CodIva = string.Empty;
-            PercIva = 0;
-            AnnoIntervento = 0;
-            NrInterventiFranchigia = 0;
-            NrInterventiPeriodo = 0;
-            NrInterventiMese = 0;
-            NrInterventiOltreFranchigia = 0;
             ContrattoFox = c.CodContratto;
             CodiceIntegra = c.CodIntegra;
 
@@ -312,8 +262,8 @@ namespace FatturazioneContratti.Orders
             DateTime nextDate = s.DataProssimaFatt ?? DomainConstants.DataNulla;
             DateTime d = DomainConstants.DataNulla;
 
-            IsOk = true;
-            Line = 0;
+            // Solo i valori letti da riga: i default (0/false/string.Empty,
+            // IsOk = true) arrivano già da inizializzatori + this().
             Item = s.Servizio;
             Description = s.Descrizione;
             UoM = s.Um;
@@ -324,35 +274,14 @@ namespace FatturazioneContratti.Orders
             DataPrevistaConsegna = nextDate;
             DataConfermaConsegna = nextDate;
             QtaOrdine = Math.Round(s.Qta ?? 0, DomainConstants.DecimaliPercentuale);
-            NrCanoniIniziale = 0;
             QtaCorrente = Math.Round(s.Qta ?? 0, DomainConstants.DecimaliPercentuale);
             QtaFranchigia = Math.Round(s.Franchigia ?? 0, DomainConstants.DecimaliPercentuale);
-            QtaDaRifatturare = 0;
-            DaRifatturare = false;
             DataProssimaRifatturazione = d;
-            CanoneFuoriRangeDate = false;
-            QtaSospesa = 0;
-            SospesoDaAttivita = false;
-            QtaAnnullata = 0;
-            HaAnnullatoDaAttivita = false;
-            DataCessazioneDaAttivita = d;
             CanoniDataIn = d;
             CanoniDataFin = d;
             PeriodoDataIn = d;
             PeriodoDataFin = d;
             TipologiaServizio = (FatturazioneContratti.Common.TipologiaServizio)(s.AlltipoRigaServizio.TipologiaServizio ?? 0);
-            IsCanone = false;
-            IsConsuntivo = false;
-            IsUnaTantum = false;
-            IsAConsumo = false;
-            IsContinuativo = false;
-            IsCampagna = false;
-            PrecendementeCessato = false;
-            DataCessazione = d;
-            DataScadenzaFissa = d;
-            Contropartita = string.Empty;
-            CodIva = string.Empty;
-            PercIva = 0;
             AnnoIntervento = s.AnnoIntervento ?? 0;
             NrInterventiFranchigia = s.NrInterventiInFranchigia ?? 0;
             NrInterventiMese = s.NrInterventiMese ?? 0;
@@ -372,7 +301,6 @@ namespace FatturazioneContratti.Orders
             postUltimoGiorno = new DateTime(postUltimoGiorno.Year, postUltimoGiorno.Month, DateTime.DaysInMonth(postUltimoGiorno.Year, postUltimoGiorno.Month));
             DataProssimaFattura = postUltimoGiorno;
 
-            NrCanoniIniziale = 0;
             PeriodoDataIn = CanoniDataIn;
             PeriodoDataFin = CanoniDataFin;
         }

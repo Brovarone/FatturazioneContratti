@@ -19,19 +19,19 @@ namespace FatturazioneContratti.Orders
         public int CurrentLastLine { get; set; }
         public int CurrentLastPosition { get; set; }
         public int CurrentLastSubId { get; set; }
-        public string Cliente { get; set; }
+        public string Cliente { get; set; } = string.Empty;
         public DateTime OrdDate { get; set; }
-        public string OrdNo { get; set; }
+        public string OrdNo { get; set; } = string.Empty;
 
         /// <summary>Indica solo che è presente una data. Il controllo va poi fatto sulla riga.</summary>
         public bool HaScadenzaFissa { get; set; }
         public DateTime DataScadenzaFissa { get; set; }
         public bool HaDataCessazione { get; set; }
         public DateTime DataCessazione { get; set; }
-        public string Commessa { get; set; }
-        public string CdC { get; set; }
-        public string CIG { get; set; }
-        public string CUP { get; set; }
+        public string Commessa { get; set; } = string.Empty;
+        public string CdC { get; set; } = string.Empty;
+        public string CIG { get; set; } = string.Empty;
+        public string CUP { get; set; } = string.Empty;
 
         /// <summary>
         /// Indica se è presente una delle due date (Cessazione o Scadenza Fissa).
@@ -41,26 +41,12 @@ namespace FatturazioneContratti.Orders
 
         public CurOrd()
         {
+            // I default CLR (0/false) e gli inizializzatori (string.Empty) coprono
+            // già tutto il resto: qui restano solo le date con valore calcolato.
             var d = DateTime.Today;
-            SaleOrdId = 0;
-            LastLine = 0;
-            LastPosition = 0;
-            LastSubId = 0;
-            CurrentLastLine = 0;
-            CurrentLastPosition = 0;
-            CurrentLastSubId = 0;
-            Cliente = string.Empty;
             OrdDate = d;
-            OrdNo = string.Empty;
-            HaScadenzaFissa = false;
             DataScadenzaFissa = d;
-            HaDataCessazione = false;
             DataCessazione = d;
-            Commessa = string.Empty;
-            CdC = string.Empty;
-            CIG = string.Empty;
-            CUP = string.Empty;
-            EsisteDataScadenza = false;
         }
 
         /// <summary>Popola la classe a partire da un ordine di vendita esistente (ex New(o As MaSaleOrd)).</summary>
