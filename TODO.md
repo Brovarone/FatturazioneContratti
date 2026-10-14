@@ -104,7 +104,11 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
 - [x] `Common/FattureContextExtensions.cs`: cache `Initializers` ora a due livelli
   `IModel -> Type` (prima solo `Type`, quindi legata al primo DbContext visto:
   applicava i default del primo modello a contesti con modello diverso).
-- `Invoicing/FattureDaOrdiniService.cs`: noto, SQL raw, fuori Scope sessione.
+- [x] `Invoicing/FattureDaOrdiniService.cs`: resta SQL raw di proposito (UPDATE...FROM con
+  join su 3 tabelle, scomoda da esprimere con EF), ma allineato al resto del progetto:
+  valori `LineType`/`DocumentType` presi dagli enum `Common/MagoEnum.cs` invece dei numeri
+  hardcoded, e timestamp unico per operazione (`now` a inizio metodo, come il campo `_now`
+  degli altri servizi). Restano fuori portata i nomi di tabella/colonna, non tipizzati.
 
 ---
 
