@@ -45,18 +45,27 @@ Tutte le impostazioni runtime in `AppConfig` (classe statica, JSON-backed):
 | `CurOrdRowCalculations.cs` | Logica pura date/quantità (diff mesi, sospensioni, cessazioni, finestre ISTAT) |
 | `FiltriOrdini` / `FiltriOrdiniConsuntivo` | DTO filtri bindati alle form UI |
 | `EntityCloner.CloneFromPrototype` | Shallow copy veloce via reflection; clona entità "prototipo" EF pre-riempite con default Fluent API |
-| `FattureContextExtensions.AddNew<T>()` | Crea istanza entità con tutti i `HasDefaultValueSql` applicati (replica VB `DataSet.AddNew`) |
+| `FattureContextExtensions.AddNew<T>()` | Crea istanza entità con tutti i `HasDefaultValueSql` applicati (replica VB `DataSet.AddNew`). Inizializzatori cachati **per `IModel`**, non per tipo |
+| `StringHelpers.SubstringSafe` | Troncamento sicuro (trim + max len), mai null — usato dai servizi su campi nota |
+| `MagoEnum.cs` | `LineType`, `DocumentType`, `CrossReference` — valori FK Mago. Usare gli enum, mai numeri hardcoded |
+| `CrashLogger.cs` | Log crash globale (`crash_yyyyMMdd_HHmmss_fff.log`), chiamato dai handler in `Program.cs` |
 | `BulkPersistenceHelper` | Wrapper `EFCore.BulkExtensions`; esegue `BulkInsert`/`BulkUpdate`/`BulkInsertOrUpdate` in transazione con `DBCC TRACEON(610)` per minimal logging |
 
 ### Servizi (`Orders/`, `Invoicing/`)
-- **OrderGenerationService** — `GeneraRigheOrdine()` (canoni/servizi), `AdeguaIstatOrdine()`
+- **OrderGenerationService** (partial, file `.cs` + `.Istat.cs`) — `GeneraRigheOrdine(GeneraRigheOrdineOptions)`, `AdeguaIstatOrdine()`
+  - Firma a record unico: `GeneraRigheOrdineOptions` raggruppa filtri, `DimensioneBlocco` e callback (log, stato, 2 progress)
+  - Corpo scomposto: `ApplicaFiltriComuni` / `EstraiIdsOrdini` (condivisi con ISTAT) + `CaricaDefaultVenditeIva`
+  - Stato mutabile in `StatoElaborazioneOrdini` (collettori + accumulatori log) e `StatoOrdine` (contatori per singolo ordine); elaborazione in `ElaboraOrdine` / `ElaboraContratto`
+  - Ciclo a blocchi come **iterator locale** `CaricaOrdiniPerBlocco` (stesso pattern del workflow ISTAT)
   - Carica prima solo ID ordini, poi processa a blocchi (default 100) con `AsSplitQuery()` + predicato `OR`
   - **Modalità debug** (`AppConfig.IsDebugging`): forza scan atomico per-order per far emergere `SqlNullValueException` su righe corrotte
   - Accumula cambiamenti in memoria → singola transazione bulk finale
 - **ConsuntivoService** — `ControllaFlussoIntegra()` (valida interventi), `GeneraFattureConsuntivo()` (bulk-insert fatture)
   - Usa mapping hardcoded: `FilialiMapping`, `MappingsEventoIntegra`, `CausaliPagamentoFatturaElettronica`
   - Logica raggruppamento fatture in `Break()` — rispetta flag `MaSalesOrdParameters` fulfillment break
-- **FattureDaOrdiniService** — `UPDATE` SQL raw join `MA_SaleDocDetail` → `MA_SaleOrdDetails`
+- **FattureDaOrdiniService** — classe `static`, `UPDATE` SQL raw join `MA_SaleDocDetail` → `MA_SaleOrdDetails`, con `SqlConnection`/`SqlTransaction` ricevuti dal caller
+  - Resta raw di proposito (l'`UPDATE ... FROM` su 3 tabelle è scomodo in EF), ma i valori sono presi dagli enum `MagoEnum` e il timestamp è unico per operazione
+  - Unico residuo raw: i **nomi di tabella/colonna**, non tipizzati dal compilatore
 
 ### UI (`Forms/`)
 - `FLogin` — form principale, orchestra i 4 workflow via `Task.Run` background
@@ -111,6 +120,10 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 7. **Caricamento a chunk** — `OrderGenerationService.LoadOrdersChunkByOrIn` costruisce `Expression<Func<MaSaleOrd,bool>>` predicato OR per batch ID. Evita esplosione cartesiana da `Include` su set grandi.
 8. **Niente DI / IoC** — Servizi istanziati manualmente in `FLogin` con `SqlTools.CreateContext()` + `AppConfig.LoginId`.
 9. **Commenti/logica in italiano** — Commenti business logic in italiano; preservarli modificando codice calcolo.
+10. **Timestamp unico per operazione** — Non chiamare `DateTime.Now` a ogni riga: i servizi di istanza lo catturano in un campo `_now` (inizializzato nel costruttore), quelli `static` in una locale a inizio metodo. Mai `static readonly`: in un'app WinForms long-lived congelerebbe il valore al primo avvio.
+11. **Valori Mago dagli enum** — Per `LineType` / `DocumentType` / `CrossReference` usare `Common/MagoEnum.cs`, mai numeri hardcoded (neppure nelle query raw).
+12. **Callback inutilizzati vanno rimossi** — Le firme pubbliche espongono solo callback realmente usati: se ne resta uno morto (es. il vecchio `progress3`), eliminarlo invece di mantenerlo a `null`.
+13. **Stato di elaborazione esplicito** — Quando un metodo supera ~150 righe, raggruppa collettori/accumulatori in una classe di stato (`StatoElaborazioneOrdini`) invece di moltiplicare parametri `out`/`ref`.
 
 ## Mappa Proprietà File
 | Directory | Proprietario | Note |
@@ -142,7 +155,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 - Testare sia `Cadenza.Anticipato` (1° del mese) che `Posticipato` (fine mese)
 
 ### Cambiare dimensione batch bulk
-- Parametro `dimensioneBlocco` in `OrderGenerationService.GeneraRigheOrdine` (default 100)
+- Parametro `DimensioneBlocco` in `GeneraRigheOrdineOptions` (default 100)
 - `BulkPersistenceHelper.BulkConfig.BatchSize` auto-scala: 0 (<5000 righe) o `count/10`
 
 ## Limitazioni Note
@@ -155,4 +168,4 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 ## Riferimenti
 - `MigrazioneVb_Csharp.txt` — checklist riassuntiva migrazione
 - `copia.ps1` — script copia model (solo entità, NON DbContext)
-- `Common/DbDefaults.cs` — helper mapping default values (se esiste)
+- `TODO.md` — promemoria sessione di revisione, fix già applicate e verifica manuale da fare
