@@ -56,36 +56,20 @@ namespace FatturazioneContratti.Orders
                 // -------------------------------------------------------------------------
                 // STEP 1: ESTRAZIONE SOLO DEGLI ID (Zero esplosione cartesiana, velocissimo)
                 // -------------------------------------------------------------------------
-                IQueryable<MaSaleOrd> query = _context.MaSaleOrd.AsNoTracking();
+                // Filtri comuni sulla testa ordine (date/cliente/ordine/filiale),
+                // condivisi con il workflow ISTAT.
+                IQueryable<MaSaleOrd> query = ApplicaFiltriComuni(_context.MaSaleOrd.AsNoTracking(), filtri);
 
-
-                // Applicazione dei filtri di data sulla testa ordine
-                if (filtri.FiltroDateOrdini)
-                {
-                    query = query.Where(o => o.OrderDate.HasValue
-                        && o.OrderDate.Value.Date >= filtri.FromOrdDate
-                        && o.OrderDate.Value.Date <= filtri.ToOrdDate);
-                }
-                else
-                {
-                    query = query.Where(o => o.OrderDate.HasValue && o.OrderDate <= filtri.ToOrdDate);
-                }
-                // Filtri Divisione
+                // Filtri Divisione (specifici della generazione canoni)
                 if (filtri.DivisioneTecnologia) query = query.Where(o => o.Divisione == (int?)Divisione.Tecnologia);
                 if (filtri.DivisioneVigilanza) query = query.Where(o => o.Divisione == (int?)Divisione.Vigilanza);
 
-                // Filtri anagrafici e gestionali
-                if (filtri.SingoloCliente) query = query.Where(o => o.Customer == filtri.Cliente);
-                if (filtri.SingoloOrdine) query = query.Where(o => o.InternalOrdNo == filtri.NrOrd);
-                if (filtri.SingolaFiliale) query = query.Where(o => o.CostCenter == filtri.Filiale);
+                // Filtro priorità (specifico della generazione canoni)
                 if (filtri.SingolaPriorita && int.TryParse(filtri.Priorita, out int pVal))
                     query = query.Where(o => o.Priority == pVal);
 
                 // Eseguiamo la query materializzando SOLO i numeri interi degli ID ordini
-                var allOrderIds = query
-                    .OrderBy(o => o.SaleOrdId)
-                    .Select(o => o.SaleOrdId)
-                    .ToList();
+                var allOrderIds = EstraiIdsOrdini(query);
 
                 //var allOrdersExplosion = query.ToList(); // <- posso ottenere subito l'esplosione
                 if (!allOrderIds.Any())
@@ -101,14 +85,11 @@ namespace FatturazioneContratti.Orders
                 updateStatus?.Invoke(msgTot);
 
                 // Default vendite e IVA
-                var defVendite = _context.MaUserDefaultSales.FirstOrDefault();
-                var defIva = _context.MaTaxCodesDefaults.FirstOrDefault();
-                var codiciIva = _context.MaTaxCodes.ToList();
-
-                string sDefContropartita = defVendite?.ServicesSalesAccount ?? string.Empty;
-                string sDefCodIva = defIva?.TaxCode ?? string.Empty;
-                var taxDefault = codiciIva.FirstOrDefault(t => t.TaxCode == sDefCodIva);
-                double dDefPercIva = Math.Round((double)(taxDefault?.Perc ?? 0), DomainConstants.DecimaliPercentuale);
+                var defaultVenditeIva = CaricaDefaultVenditeIva();
+                var codiciIva = defaultVenditeIva.CodiciIva;
+                string sDefContropartita = defaultVenditeIva.Contropartita;
+                string sDefCodIva = defaultVenditeIva.CodIva;
+                double dDefPercIva = defaultVenditeIva.PercIva;
 
                 // COLLETTORE GLOBALE DELL'ELABORAZIONE (Resta in RAM fino alla fine)
                 var updateMaSaleOrd = new List<MaSaleOrd>();
@@ -342,6 +323,58 @@ namespace FatturazioneContratti.Orders
         }
 
         #region Metodi di supporto estrazione e regole
+
+        /// <summary>
+        /// Filtri comuni sulla testa ordine, condivisi da GeneraRigheOrdine e AdeguaIstatOrdine:
+        /// intervallo date, cliente, ordine e filiale. I filtri specifici (divisione, priorità)
+        /// restano a carico del chiamante.
+        /// </summary>
+        private static IQueryable<MaSaleOrd> ApplicaFiltriComuni(IQueryable<MaSaleOrd> query, FiltriOrdini filtri)
+        {
+            // Filtri di data sulla testa ordine
+            if (filtri.FiltroDateOrdini)
+            {
+                query = query.Where(o => o.OrderDate.HasValue
+                    && o.OrderDate.Value.Date >= filtri.FromOrdDate
+                    && o.OrderDate.Value.Date <= filtri.ToOrdDate);
+            }
+            else
+            {
+                query = query.Where(o => o.OrderDate.HasValue && o.OrderDate <= filtri.ToOrdDate);
+            }
+
+            // Filtri anagrafici
+            if (filtri.SingoloCliente) query = query.Where(o => o.Customer == filtri.Cliente);
+            if (filtri.SingoloOrdine) query = query.Where(o => o.InternalOrdNo == filtri.NrOrd);
+            if (filtri.SingolaFiliale) query = query.Where(o => o.CostCenter == filtri.Filiale);
+
+            return query;
+        }
+
+        /// <summary>
+        /// Materializza SOLO gli ID ordine (SaleOrdId) dalla query filtrata, evitando
+        /// l'esplosione cartesiana degli Include sul set completo.
+        /// </summary>
+        private static List<int> EstraiIdsOrdini(IQueryable<MaSaleOrd> query)
+            => query.OrderBy(o => o.SaleOrdId).Select(o => o.SaleOrdId).ToList();
+
+        /// <summary>
+        /// Carica i default ERP di vendita/IVA usati per contropartita, codice IVA e
+        /// percentuale di default delle righe generate.
+        /// </summary>
+        private DefaultVenditeIva CaricaDefaultVenditeIva()
+        {
+            var defVendite = _context.MaUserDefaultSales.FirstOrDefault();
+            var defIva = _context.MaTaxCodesDefaults.FirstOrDefault();
+            var codiciIva = _context.MaTaxCodes.ToList();
+
+            string sDefContropartita = defVendite?.ServicesSalesAccount ?? string.Empty;
+            string sDefCodIva = defIva?.TaxCode ?? string.Empty;
+            var taxDefault = codiciIva.FirstOrDefault(t => t.TaxCode == sDefCodIva);
+            double dDefPercIva = Math.Round((double)(taxDefault?.Perc ?? 0), DomainConstants.DecimaliPercentuale);
+
+            return new DefaultVenditeIva(sDefContropartita, sDefCodIva, dDefPercIva, codiciIva);
+        }
 
         /// <summary>
         /// Carica un lotto ("chunk") di ordini di vendita (MaSaleOrd) comprensivo di tutto il grafo 

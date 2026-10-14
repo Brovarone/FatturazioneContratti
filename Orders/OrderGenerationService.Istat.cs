@@ -69,26 +69,10 @@ namespace FatturazioneContratti.Orders
                         || o.ALLOrdCliAcc.DataCessazione == DomainConstants.DataNulla
                         || o.ALLOrdCliAcc.DataCessazione > filtri.DataDecorrenza));
 
-                // Filtri opzionali utente
-                if (filtri.FiltroDateOrdini)
-                {
-                    query = query.Where(o => o.OrderDate.HasValue
-                        && o.OrderDate.Value.Date >= filtri.FromOrdDate
-                        && o.OrderDate.Value.Date <= filtri.ToOrdDate);
-                }
-                else
-                {
-                    query = query.Where(o => o.OrderDate.HasValue && o.OrderDate <= filtri.ToOrdDate);
-                }
+                // Filtri comuni utente (date/cliente/ordine/filiale), condivisi con GeneraRigheOrdine
+                query = ApplicaFiltriComuni(query, filtri);
 
-                if (filtri.SingoloCliente) query = query.Where(o => o.Customer == filtri.Cliente);
-                if (filtri.SingoloOrdine) query = query.Where(o => o.InternalOrdNo == filtri.NrOrd);
-                if (filtri.SingolaFiliale) query = query.Where(o => o.CostCenter == filtri.Filiale);
-
-                var allOrderIds = query
-                    .OrderBy(o => o.SaleOrdId)
-                    .Select(o => o.SaleOrdId)
-                    .ToList();
+                var allOrderIds = EstraiIdsOrdini(query);
 
                 if (!allOrderIds.Any())
                 {
