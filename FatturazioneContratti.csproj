@@ -7,6 +7,17 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>FatturazioneContratti.ico</ApplicationIcon>
+    <!-- Versionamento semiautomatico (letto a runtime da ? > Informazioni).
+         Cambia a mano solo MajorMinor per major/minor release; build e revision
+         crescono da soli a ogni build: build = giorni dal 01/01/2026,
+         revision = secondi dalla mezzanotte UTC / 2. -->
+    <MajorMinor>1.0</MajorMinor>
+    <BuildDays>$([System.DateTime]::UtcNow.Subtract($([System.DateTime]::Parse("2026-01-01"))).TotalDays)</BuildDays>
+    <VersionBuild>$([System.Math]::Floor($(BuildDays)))</VersionBuild>
+    <SecondsToday>$([System.DateTime]::UtcNow.TimeOfDay.TotalSeconds)</SecondsToday>
+    <VersionRevision>$([System.Math]::Floor($([MSBuild]::Divide($(SecondsToday), 2))))</VersionRevision>
+    <AssemblyVersion>$(MajorMinor).$(VersionBuild).$(VersionRevision)</AssemblyVersion>
+    <FileVersion>$(MajorMinor).$(VersionBuild).$(VersionRevision)</FileVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">

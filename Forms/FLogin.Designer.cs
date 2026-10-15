@@ -70,7 +70,7 @@
             esciToolStripMenuItem.ShortcutKeys = Keys.Alt | Keys.F4;
             esciToolStripMenuItem.Size = new Size(136, 22);
             esciToolStripMenuItem.Text = "&Esci";
-            esciToolStripMenuItem.Click += esciToolStripMenuItem_Click;
+            esciToolStripMenuItem.Click += EsciToolStripMenuItem_Click;
             // 
             // strumentiToolStripMenuItem
             // 
@@ -84,7 +84,7 @@
             configurazioneAvanzataToolStripMenuItem.Name = "configurazioneAvanzataToolStripMenuItem";
             configurazioneAvanzataToolStripMenuItem.Size = new Size(236, 22);
             configurazioneAvanzataToolStripMenuItem.Text = "&Configurazione DB e Percorsi...";
-            configurazioneAvanzataToolStripMenuItem.Click += configurazioneAvanzataToolStripMenuItem_Click;
+            configurazioneAvanzataToolStripMenuItem.Click += ConfigurazioneAvanzataToolStripMenuItem_Click;
             // 
             // toolStripSeparator1
             // 
@@ -96,21 +96,21 @@
             apriJsonToolStripMenuItem.Name = "apriJsonToolStripMenuItem";
             apriJsonToolStripMenuItem.Size = new Size(236, 22);
             apriJsonToolStripMenuItem.Text = "Modifica file &settings.json";
-            apriJsonToolStripMenuItem.Click += apriJsonToolStripMenuItem_Click;
+            apriJsonToolStripMenuItem.Click += ApriJsonToolStripMenuItem_Click;
             // 
             // apriCartellaSettingsToolStripMenuItem
             // 
             apriCartellaSettingsToolStripMenuItem.Name = "apriCartellaSettingsToolStripMenuItem";
             apriCartellaSettingsToolStripMenuItem.Size = new Size(236, 22);
             apriCartellaSettingsToolStripMenuItem.Text = "Apri Cartella &Impostazioni";
-            apriCartellaSettingsToolStripMenuItem.Click += apriCartellaSettingsToolStripMenuItem_Click;
+            apriCartellaSettingsToolStripMenuItem.Click += ApriCartellaSettingsToolStripMenuItem_Click;
             // 
             // apriCartellaLogToolStripMenuItem
             // 
             apriCartellaLogToolStripMenuItem.Name = "apriCartellaLogToolStripMenuItem";
             apriCartellaLogToolStripMenuItem.Size = new Size(236, 22);
             apriCartellaLogToolStripMenuItem.Text = "Apri Cartella &Log";
-            apriCartellaLogToolStripMenuItem.Click += apriCartellaLogToolStripMenuItem_Click;
+            apriCartellaLogToolStripMenuItem.Click += ApriCartellaLogToolStripMenuItem_Click;
             // 
             // moduliToolStripMenuItem
             // 
@@ -132,7 +132,7 @@
             pagheToolStripMenuItem.Name = "pagheToolStripMenuItem";
             pagheToolStripMenuItem.Size = new Size(192, 22);
             pagheToolStripMenuItem.Text = "Flusso &Paghe";
-            pagheToolStripMenuItem.Click += pagheToolStripMenuItem_Click;
+            pagheToolStripMenuItem.Click += PagheToolStripMenuItem_Click;
             // 
             // aiutoToolStripMenuItem
             // 
@@ -146,7 +146,7 @@
             informazioniToolStripMenuItem.Name = "informazioniToolStripMenuItem";
             informazioniToolStripMenuItem.Size = new Size(232, 22);
             informazioniToolStripMenuItem.Text = "&Informazioni su FatturazioneContratti...";
-            informazioniToolStripMenuItem.Click += informazioniToolStripMenuItem_Click;
+            informazioniToolStripMenuItem.Click += InformazioniToolStripMenuItem_Click;
             // 
             // grpAzioni
             // 
@@ -172,7 +172,7 @@
             btnAllineaFattureOrdini.TabIndex = 3;
             btnAllineaFattureOrdini.Text = "Allinea Canoni Fatture";
             btnAllineaFattureOrdini.UseVisualStyleBackColor = true;
-            btnAllineaFattureOrdini.Click += btnAllineaFattureOrdini_Click;
+            btnAllineaFattureOrdini.Click += BtnAllineaFattureOrdini_Click;
             // 
             // btnConsuntivi
             // 
@@ -183,7 +183,7 @@
             btnConsuntivi.TabIndex = 2;
             btnConsuntivi.Text = "Consuntivazione / Flusso Integra";
             btnConsuntivi.UseVisualStyleBackColor = true;
-            btnConsuntivi.Click += btnConsuntivi_Click;
+            btnConsuntivi.Click += BtnConsuntivi_Click;
             // 
             // btnAdeguamentoIstat
             // 
@@ -194,7 +194,7 @@
             btnAdeguamentoIstat.TabIndex = 1;
             btnAdeguamentoIstat.Text = "Adeguamento ISTAT";
             btnAdeguamentoIstat.UseVisualStyleBackColor = true;
-            btnAdeguamentoIstat.Click += btnAdeguamentoIstat_Click;
+            btnAdeguamentoIstat.Click += BtnAdeguamentoIstat_Click;
             // 
             // btnGeneraOrdini
             // 
@@ -206,7 +206,7 @@
             btnGeneraOrdini.TabIndex = 0;
             btnGeneraOrdini.Text = "Genera Canoni da Ordini";
             btnGeneraOrdini.UseVisualStyleBackColor = true;
-            btnGeneraOrdini.Click += btnGeneraOrdini_Click;
+            btnGeneraOrdini.Click += BtnGeneraOrdini_Click;
             // 
             // lstStato
             // 
@@ -257,7 +257,7 @@
             btnPulisciStato.TabIndex = 6;
             btnPulisciStato.Text = "Pulisci";
             btnPulisciStato.UseVisualStyleBackColor = true;
-            btnPulisciStato.Click += btnPulisciStato_Click;
+            btnPulisciStato.Click += BtnPulisciStato_Click;
             // 
             // subProgressBar
             // 
@@ -278,7 +278,7 @@
             lnkApriLog.TabStop = true;
             lnkApriLog.Text = "Apri file di log";
             lnkApriLog.Visible = false;
-            lnkApriLog.LinkClicked += lnkApriLog_LinkClicked;
+            lnkApriLog.LinkClicked += LnkApriLog_LinkClicked;
             // 
             // FLogin
             // 

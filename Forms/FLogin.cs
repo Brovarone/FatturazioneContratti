@@ -21,15 +21,15 @@ namespace FatturazioneContratti.Forms
 
         // nuovi campi per il logging su file
         private string _logFilePath = string.Empty;
-        private readonly object _logLock = new object();
+        private readonly object _logLock = new();
         private bool _configUnlocked = false; 
 
-        private void esciToolStripMenuItem_Click(object sender, EventArgs e)
+        private void EsciToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Close();
         }
 
-        private void configurazioneAvanzataToolStripMenuItem_Click(object sender, EventArgs e)
+        private void ConfigurazioneAvanzataToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (!_configUnlocked && !FPasswordPrompt.ChiediPassword(this, AdminPassword))
             {
@@ -55,27 +55,27 @@ namespace FatturazioneContratti.Forms
             }
         }
 
-        private void apriJsonToolStripMenuItem_Click(object sender, EventArgs e)
+        private void ApriJsonToolStripMenuItem_Click(object sender, EventArgs e)
         {
             AppConfig.ApriFileJson();
         }
 
-        private void apriCartellaSettingsToolStripMenuItem_Click(object sender, EventArgs e)
+        private void ApriCartellaSettingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             AppConfig.ApriCartellaImpostazioni();
         }
 
-        private void apriCartellaLogToolStripMenuItem_Click(object sender, EventArgs e)
+        private void ApriCartellaLogToolStripMenuItem_Click(object sender, EventArgs e)
         {
             AppConfig.ApriCartellaLog();
         }
 
-        private void pagheToolStripMenuItem_Click(object sender, EventArgs e)
+        private void PagheToolStripMenuItem_Click(object sender, EventArgs e)
         {
             MessageBox.Show("Modulo Paghe in fase di migrazione.", "Modulo Paghe", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        private void informazioniToolStripMenuItem_Click(object sender, EventArgs e)
+        private void InformazioniToolStripMenuItem_Click(object sender, EventArgs e)
         {
             string versione = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "?";
             MessageBox.Show(
@@ -152,7 +152,7 @@ namespace FatturazioneContratti.Forms
         }
 
         // --- PROCESSO 1: GENERAZIONE RIGHE ORDINE (CANONI) ---
-        private void btnGeneraOrdini_Click(object sender, EventArgs e)
+        private void BtnGeneraOrdini_Click(object sender, EventArgs e)
         {           
             AggiornaStato("Elaborazione in corso...");
 
@@ -176,7 +176,7 @@ namespace FatturazioneContratti.Forms
         }
 
         // --- PROCESSO 2: ADEGUAMENTO ISTAT ORDINI ---
-        private void btnAdeguamentoIstat_Click(object sender, EventArgs e)
+        private void BtnAdeguamentoIstat_Click(object sender, EventArgs e)
         {
             using var formFiltri = new FAskFiltriOrdini { IsIstat = true };
             if (formFiltri.ShowDialog() != DialogResult.OK) return;
@@ -203,7 +203,7 @@ namespace FatturazioneContratti.Forms
         }
 
         // --- PROCESSO 3: CONSUNTIVAZIONE FLUSSO INTEGRA & FATTURE ---
-        private void btnConsuntivi_Click(object sender, EventArgs e)
+        private void BtnConsuntivi_Click(object sender, EventArgs e)
         {
             using var formFiltri = new FAskFiltriOrdiniConsuntivo();
             if (formFiltri.ShowDialog() != DialogResult.OK) return;
@@ -258,7 +258,7 @@ namespace FatturazioneContratti.Forms
         }
 
         // --- PROCESSO 4: ALLINEAMENTO DATE CANONI FATTURE DA ORDINI ---
-        private void btnAllineaFattureOrdini_Click(object sender, EventArgs e)
+        private void BtnAllineaFattureOrdini_Click(object sender, EventArgs e)
         {
             using var formFiltri = new FAskFiltriAllineamentoFatture();
             if (formFiltri.ShowDialog(this) != DialogResult.OK) return;
@@ -445,9 +445,9 @@ namespace FatturazioneContratti.Forms
             if (colore.HasValue) lblStatus.ForeColor = colore.Value;
         }        
 
-        private void btnPulisciStato_Click(object sender, EventArgs e) => lstStato.Items.Clear();
+        private void BtnPulisciStato_Click(object sender, EventArgs e) => lstStato.Items.Clear();
 
-        private void lnkApriLog_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        private void LnkApriLog_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             ApriFileLog();
         }

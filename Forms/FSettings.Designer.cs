@@ -95,7 +95,7 @@
             btnTestConnection.TabIndex = 8;
             btnTestConnection.Text = "Test Conn.";
             btnTestConnection.UseVisualStyleBackColor = true;
-            btnTestConnection.Click += btnTestConnection_Click;
+            btnTestConnection.Click += BtnTestConnection_Click;
             // 
             // txtLoginId
             // 
@@ -218,7 +218,7 @@
             chkTestDb.TabIndex = 2;
             chkTestDb.Text = "Usa Database Test";
             chkTestDb.UseVisualStyleBackColor = true;
-            chkTestDb.CheckedChanged += chkTestDb_CheckedChanged;
+            chkTestDb.CheckedChanged += ChkTestDb_CheckedChanged;
             // 
             // rdoSpa
             // 
@@ -230,7 +230,7 @@
             rdoSpa.TabIndex = 1;
             rdoSpa.Text = "Azienda SPA";
             rdoSpa.UseVisualStyleBackColor = true;
-            rdoSpa.CheckedChanged += rdoAzienda_CheckedChanged;
+            rdoSpa.CheckedChanged += RdoAzienda_CheckedChanged;
             // 
             // rdoUno
             // 
@@ -244,7 +244,7 @@
             rdoUno.TabStop = true;
             rdoUno.Text = "Azienda UNO";
             rdoUno.UseVisualStyleBackColor = true;
-            rdoUno.CheckedChanged += rdoAzienda_CheckedChanged;
+            rdoUno.CheckedChanged += RdoAzienda_CheckedChanged;
             // 
             // grpDatabase
             // 
@@ -371,7 +371,7 @@
             btnSfogliaPaghe.TabIndex = 8;
             btnSfogliaPaghe.Text = "...";
             btnSfogliaPaghe.UseVisualStyleBackColor = true;
-            btnSfogliaPaghe.Click += btnSfoglia_Click;
+            btnSfogliaPaghe.Click += BtnSfoglia_Click;
             // 
             // txtPathPaghe
             // 
@@ -400,7 +400,7 @@
             btnSfogliaFox.TabIndex = 5;
             btnSfogliaFox.Text = "...";
             btnSfogliaFox.UseVisualStyleBackColor = true;
-            btnSfogliaFox.Click += btnSfoglia_Click;
+            btnSfogliaFox.Click += BtnSfoglia_Click;
             // 
             // txtPathFox
             // 
@@ -448,7 +448,7 @@
             btnSfogliaLastLog.TabIndex = 11;
             btnSfogliaLastLog.Text = "...";
             btnSfogliaLastLog.UseVisualStyleBackColor = true;
-            btnSfogliaLastLog.Click += btnSfoglia_Click;
+            btnSfogliaLastLog.Click += BtnSfoglia_Click;
             // 
             // txtLastLogPath
             // 
@@ -477,7 +477,7 @@
             btnSfogliaGenerale.TabIndex = 2;
             btnSfogliaGenerale.Text = "...";
             btnSfogliaGenerale.UseVisualStyleBackColor = true;
-            btnSfogliaGenerale.Click += btnSfoglia_Click;
+            btnSfogliaGenerale.Click += BtnSfoglia_Click;
             // 
             // txtPathGenerale
             // 
@@ -506,7 +506,7 @@
             btnApriJson.TabIndex = 4;
             btnApriJson.Text = "Modifica file .json";
             btnApriJson.UseVisualStyleBackColor = true;
-            btnApriJson.Click += btnApriJson_Click;
+            btnApriJson.Click += BtnApriJson_Click;
             // 
             // btnSalva
             // 
@@ -517,7 +517,7 @@
             btnSalva.TabIndex = 5;
             btnSalva.Text = "Salva";
             btnSalva.UseVisualStyleBackColor = true;
-            btnSalva.Click += btnSalva_Click;
+            btnSalva.Click += BtnSalva_Click;
             // 
             // btnAnnulla
             // 

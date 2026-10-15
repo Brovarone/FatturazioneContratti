@@ -40,23 +40,23 @@ namespace FatturazioneContratti.Forms
             txtNrLast.Enabled = interval;
         }
 
-        private void dtpDa_ValueChanged(object sender, EventArgs e)
+        private void DtpDa_ValueChanged(object sender, EventArgs e)
         {
             if (dtpA.Value < dtpDa.Value)
                 dtpA.Value = dtpDa.Value;
         }
 
-        private void radTuttiNumeri_CheckedChanged(object sender, EventArgs e)
+        private void RadTuttiNumeri_CheckedChanged(object sender, EventArgs e)
         {
             UpdateNumberInputs();
         }
 
-        private void radIntervalloNumeri_CheckedChanged(object sender, EventArgs e)
+        private void RadIntervalloNumeri_CheckedChanged(object sender, EventArgs e)
         {
             UpdateNumberInputs();
         }
 
-        private void btnOk_Click(object sender, EventArgs e)
+        private void BtnOk_Click(object sender, EventArgs e)
         {
             if (radIntervalloNumeri.Checked)
             {

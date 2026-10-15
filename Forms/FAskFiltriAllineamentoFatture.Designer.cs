@@ -51,7 +51,7 @@ namespace FatturazioneContratti.Forms
             dtpDa.Name = "dtpDa";
             dtpDa.Size = new Size(111, 23);
             dtpDa.TabIndex = 1;
-            dtpDa.ValueChanged += dtpDa_ValueChanged;
+            dtpDa.ValueChanged += DtpDa_ValueChanged;
             // 
             // lblA
             // 
@@ -101,7 +101,7 @@ namespace FatturazioneContratti.Forms
             radTuttiNumeri.TabStop = true;
             radTuttiNumeri.Text = "Tutti i numeri";
             radTuttiNumeri.UseVisualStyleBackColor = true;
-            radTuttiNumeri.CheckedChanged += radTuttiNumeri_CheckedChanged;
+            radTuttiNumeri.CheckedChanged += RadTuttiNumeri_CheckedChanged;
             // 
             // radIntervalloNumeri
             // 
@@ -113,7 +113,7 @@ namespace FatturazioneContratti.Forms
             radIntervalloNumeri.TabIndex = 1;
             radIntervalloNumeri.Text = "Intervallo primo/ultimo";
             radIntervalloNumeri.UseVisualStyleBackColor = true;
-            radIntervalloNumeri.CheckedChanged += radIntervalloNumeri_CheckedChanged;
+            radIntervalloNumeri.CheckedChanged += RadIntervalloNumeri_CheckedChanged;
             // 
             // lblNrFirst
             // 
@@ -165,7 +165,7 @@ namespace FatturazioneContratti.Forms
             btnOk.TabIndex = 5;
             btnOk.Text = "OK";
             btnOk.UseVisualStyleBackColor = true;
-            btnOk.Click += btnOk_Click;
+            btnOk.Click += BtnOk_Click;
             // 
             // btnCancel
             // 

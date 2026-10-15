@@ -51,7 +51,7 @@ namespace FatturazioneContratti.Forms
             };
         }
 
-        private void btnSfoglia_Click(object sender, EventArgs e)
+        private void BtnSfoglia_Click(object sender, EventArgs e)
         {
             using var fbd = new FolderBrowserDialog();
             if (sender == btnSfogliaGenerale && fbd.ShowDialog() == DialogResult.OK)
@@ -64,12 +64,12 @@ namespace FatturazioneContratti.Forms
                 txtLastLogPath.Text = fbd.SelectedPath;
         }
 
-        private void btnApriJson_Click(object sender, EventArgs e)
+        private void BtnApriJson_Click(object sender, EventArgs e)
         {
             AppConfig.ApriFileJson();
         }
 
-        private void btnTestConnection_Click(object sender, EventArgs e)
+        private void BtnTestConnection_Click(object sender, EventArgs e)
         {
             // Sincronizza temporaneamente i valori dalla UI in AppConfig (non ancora salvati)
             AppConfig.SqlServer = txtServer.Text.Trim();
@@ -91,18 +91,18 @@ namespace FatturazioneContratti.Forms
             }
         }
 
-        private void chkTestDb_CheckedChanged(object sender, EventArgs e)
+        private void ChkTestDb_CheckedChanged(object sender, EventArgs e)
         {
             // Aggiorna anteprima stato DB in uso nella form (AppConfig è già aggiornato dal Test o dal Save)
             lblDbInUso.Text = $"Database attivo: {AppConfig.DatabaseInUse}";
         }
 
-        private void rdoAzienda_CheckedChanged(object sender, EventArgs e)
+        private void RdoAzienda_CheckedChanged(object sender, EventArgs e)
         {
             // placeholder: lo stato effettivo viene salvato nel btnSalva
         }
 
-        private void btnSalva_Click(object sender, EventArgs e)
+        private void BtnSalva_Click(object sender, EventArgs e)
         {
             // Assegna e salva
             AppConfig.SqlServer = txtServer.Text.Trim();
