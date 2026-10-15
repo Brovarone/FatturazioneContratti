@@ -73,7 +73,7 @@ namespace FatturazioneContratti.Orders
 
                 var allOrderIds = EstraiIdsOrdini(query);
 
-                if (!allOrderIds.Any())
+                if (allOrderIds.Count == 0)
                 {
                     logMessage?.Invoke("Nessun ordine estratto con i filtri ISTAT specificati.", AppConfig.LogTarget.Ui);
                     return true;
@@ -134,7 +134,7 @@ namespace FatturazioneContratti.Orders
 
                     bool isNewRowsAtt = false;
                     int iNewRowsAttCount = 0;
-                    int curLastLineAtt = o.AllordCliAttivita != null && o.AllordCliAttivita.Any() 
+                    int curLastLineAtt = o.AllordCliAttivita != null && o.AllordCliAttivita.Count != 0 
                         ? o.AllordCliAttivita.Max(m => m.Line) 
                         : 0;
 
@@ -146,7 +146,7 @@ namespace FatturazioneContratti.Orders
                         DataScadenzaFissa = o.ALLOrdCliAcc?.DataScadenzaFissa ?? DomainConstants.DataNulla
                     };
 
-                    if (o.ALLordCliContratto == null || !o.ALLordCliContratto.Any())
+                    if (o.ALLordCliContratto == null || o.ALLordCliContratto.Count == 0)
                         continue;
 
                     foreach (var c in o.ALLordCliContratto)

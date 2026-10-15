@@ -53,8 +53,8 @@ namespace FatturazioneContratti.Orders
         public CurOrd(MaSaleOrd o) : this()
         {
             SaleOrdId = o.SaleOrdId;
-            LastLine = o.MaSaleOrdDetails.Any() ? o.MaSaleOrdDetails.Max(m => m.Line) : 0;
-            LastPosition = o.MaSaleOrdDetails.Any() ? o.MaSaleOrdDetails.Max(m => m.Position) : 0;
+            LastLine = o.MaSaleOrdDetails.Count != 0 ? o.MaSaleOrdDetails.Max(m => m.Line) : 0;
+            LastPosition = o.MaSaleOrdDetails.Count != 0 ? o.MaSaleOrdDetails.Max(m => m.Position) : 0;
             LastSubId = (int)(o.MaSaleOrdDetails.Count != 0 ? o.MaSaleOrdDetails.Max(m => m.SubId) : 0);
             CurrentLastLine = LastLine;
             CurrentLastPosition = LastPosition;

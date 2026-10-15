@@ -13,10 +13,10 @@ using System.Text;
 
 namespace FatturazioneContratti.Orders
 {
-    public partial class OrderGenerationService
+    public partial class OrderGenerationService(FattureContext context, int loginId)
     {
-        private readonly FattureContext _context;
-        private readonly int _loginId;
+        private readonly FattureContext _context = context;
+        private readonly int _loginId = loginId;
 
         /// <summary>
         /// Timestamp unico dell'intera operazione: tutti i Tbcreated/Tbmodified/DataFineElaborazione
@@ -24,12 +24,6 @@ namespace FatturazioneContratti.Orders
         /// elaborazione risultano coerenti (prima ogni proprietà chiamava DateTime.Now separatamente).
         /// </summary>
         private readonly DateTime _now = DateTime.Now;
-
-        public OrderGenerationService(FattureContext context, int loginId)
-        {
-            _context = context;
-            _loginId = loginId;
-        }
 
         public bool GeneraRigheOrdine(GeneraRigheOrdineOptions options)
         {
@@ -64,7 +58,7 @@ namespace FatturazioneContratti.Orders
                 // Eseguiamo la query materializzando SOLO i numeri interi degli ID ordini
                 var allOrderIds = EstraiIdsOrdini(query);
 
-                if (!allOrderIds.Any())
+                if (allOrderIds.Count == 0)
                 {
                     logMessage?.Invoke("Nessun ordine estratto con i filtri specificati.", AppConfig.LogTarget.Ui);
                     return true;
@@ -158,9 +152,9 @@ namespace FatturazioneContratti.Orders
 
             var so = new StatoOrdine(
                 new CurOrd(o),
-                o.MaSaleOrdDetails.Any() ? o.MaSaleOrdDetails.Max(m => m.Position) : 0);
+                o.MaSaleOrdDetails.Count != 0 ? o.MaSaleOrdDetails.Max(m => m.Position) : 0);
 
-            if (o.ALLordCliContratto != null && o.ALLordCliContratto.Any())
+            if (o.ALLordCliContratto != null && o.ALLordCliContratto.Count != 0)
             {
                 foreach (var c in o.ALLordCliContratto)
                     ElaboraContratto(st, so, o, c);
@@ -389,7 +383,7 @@ namespace FatturazioneContratti.Orders
             if (ids == null || ids.Length == 0) return new List<MaSaleOrd>();
 
             // Definizione del grafo di query riutilizzabile sia per il batch che per l'isolamento atomico
-            IQueryable<MaSaleOrd> QueryBase(FattureContext ctx)
+            static IQueryable<MaSaleOrd> QueryBase(FattureContext ctx)
             {
                 return ctx.MaSaleOrd
                     .AsNoTracking()
@@ -504,7 +498,7 @@ namespace FatturazioneContratti.Orders
             }
         }
 
-        private bool VerificaEsclusioneContratto(
+        private static bool VerificaEsclusioneContratto(
             AllordCliContratto c,
             FiltriOrdini filtri,
             StringBuilder debugging,
@@ -563,7 +557,7 @@ namespace FatturazioneContratti.Orders
             StringBuilder errori,
             StringBuilder debugging)
         {
-            if (c.AllordCliAttivita == null || !c.AllordCliAttivita.Any()) return;
+            if (c.AllordCliAttivita == null || c.AllordCliAttivita.Count == 0) return;
 
             foreach (var att in c.AllordCliAttivita)
             {
@@ -955,11 +949,11 @@ namespace FatturazioneContratti.Orders
         /// di log, default ERP e prototipo riga. Consente di tenere l'elaborazione di singolo
         /// ordine/contratto in metodi dedicati senza lunghe liste di parametri.
         /// </summary>
-        private sealed class StatoElaborazioneOrdini
+        private sealed class StatoElaborazioneOrdini(FiltriOrdini filtri, int loginId, DateTime now)
         {
-            public FiltriOrdini Filtri { get; }
-            public int LoginId { get; }
-            public DateTime Now { get; }
+            public FiltriOrdini Filtri { get; } = filtri;
+            public int LoginId { get; } = loginId;
+            public DateTime Now { get; } = now;
 
             public MaSaleOrdDetails PrototipoRiga { get; private set; }
             public DefaultVenditeIva Default { get; private set; }
@@ -978,13 +972,6 @@ namespace FatturazioneContratti.Orders
             public int TotOrdiniConNuoveRighe { get; set; }
             public int TotOrdiniConRigheAggiornate { get; set; }
 
-            public StatoElaborazioneOrdini(FiltriOrdini filtri, int loginId, DateTime now)
-            {
-                Filtri = filtri;
-                LoginId = loginId;
-                Now = now;
-            }
-
             /// <summary>Imposta prototipo riga e default ERP (dopo la connessione/contesto).</summary>
             public void Inizializza(MaSaleOrdDetails prototipoRiga, DefaultVenditeIva def)
             {
@@ -994,21 +981,15 @@ namespace FatturazioneContratti.Orders
         }
 
         /// <summary>Stato locale relativo all'elaborazione di un singolo ordine.</summary>
-        private sealed class StatoOrdine
+        private sealed class StatoOrdine(CurOrd cOrd, int curLastPosition)
         {
-            public CurOrd COrd { get; }
-            public int CurLastPosition { get; set; }
+            public CurOrd COrd { get; } = cOrd;
+            public int CurLastPosition { get; set; } = curLastPosition;
             public int INewRowsCount { get; set; }
             public int INrRigheAValore { get; set; }
             public bool IsNewRows { get; set; }
             public bool IsUpdateRows { get; set; }
             public bool BScrittoDescrizioni { get; set; }
-
-            public StatoOrdine(CurOrd cOrd, int curLastPosition)
-            {
-                COrd = cOrd;
-                CurLastPosition = curLastPosition;
-            }
         }
 
         #endregion

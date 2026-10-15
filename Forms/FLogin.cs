@@ -279,7 +279,7 @@ namespace FatturazioneContratti.Forms
         /// Factory centralizzata per i callback di avanzamento legati alle barre UI.
         /// Evita di ripetere la costruzione di <see cref="ProgressCallbacks"/> in ogni workflow.
         /// </summary>
-        private ProgressCallbacks CreaProgress(UiProgress? barra) => new(
+        private static ProgressCallbacks CreaProgress(UiProgress? barra) => new(
             (min, max) => barra?.Init(min, max),
             () => barra?.Advance(),
             () => barra?.Finish());

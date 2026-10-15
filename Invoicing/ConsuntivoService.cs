@@ -180,7 +180,7 @@ namespace FatturazioneContratti.Invoicing
                     intQuery = intQuery.Where(o => o.InizioAllarme.HasValue && o.InizioAllarme.Value.Month == meseFiltro);
 
                 var allInterventi = intQuery.ToList();
-                if (!allInterventi.Any())
+                if (allInterventi.Count == 0)
                 {
                     logMessage?.Invoke("Nessun intervento Integra da controllare.", AppConfig.LogTarget.Ui);
                     return true;
@@ -257,35 +257,35 @@ namespace FatturazioneContratti.Invoicing
                 updateStatus?.Invoke("Salvataggio aggiornamenti interventi...");
                 _ordiniCntx.SaveChanges();
 
-                if (fatalContrattoErrorList.Any() || fatalEventoErrorList.Any() || contrattoErrorList.Any() || eventoErrorList.Any())
+                if (fatalContrattoErrorList.Count != 0 || fatalEventoErrorList.Count != 0 || contrattoErrorList.Count != 0 || eventoErrorList.Count != 0)
                 {
                     var dettaglio = new StringBuilder();
                     dettaglio.AppendLine("Riscontrate anomalie o incongruenze nel controllo flusso.");
                     logMessage?.Invoke(dettaglio.ToString(), AppConfig.LogTarget.Ui);
                     dettaglio.AppendLine();
 
-                    if (fatalContrattoErrorList.Any())
+                    if (fatalContrattoErrorList.Count != 0)
                     {
                         dettaglio.AppendLine("ERRORE CRITICO - Contratti duplicati:");
                         foreach (var c in fatalContrattoErrorList) dettaglio.AppendLine($" - {c}");
                         dettaglio.AppendLine();
                     }
 
-                    if (fatalEventoErrorList.Any())
+                    if (fatalEventoErrorList.Count != 0)
                     {
                         dettaglio.AppendLine("ERRORE CRITICO - Eventi multipli per contratto:");
                         foreach (var e in fatalEventoErrorList) dettaglio.AppendLine($" - {e}");
                         dettaglio.AppendLine();
                     }
 
-                    if (contrattoErrorList.Any())
+                    if (contrattoErrorList.Count != 0)
                     {
                         dettaglio.AppendLine("CONTRATTI NON TROVATI:");
                         foreach (var c in contrattoErrorList) dettaglio.AppendLine($" - {c}");
                         dettaglio.AppendLine();
                     }
 
-                    if (eventoErrorList.Any())
+                    if (eventoErrorList.Count != 0)
                     {
                         dettaglio.AppendLine("EVENTI NON ASSOCIATI:");
                         foreach (var e in eventoErrorList) dettaglio.AppendLine($" - {e}");
@@ -468,7 +468,7 @@ namespace FatturazioneContratti.Invoicing
                                     var periodFranchigia = (Periodo)(s.Periodicita ?? 0);
                                     var interventiEvento = d.IntegraInterventi.Where(w => string.Equals(w.TipoEvento, evento, StringComparison.OrdinalIgnoreCase)).ToList();
 
-                                    if (interventiEvento.Any())
+                                    if (interventiEvento.Count != 0)
                                     {
                                         s.AnnoIntervento = filtri.ToInterventiDate.Year;
                                         var toDataMese = new DateTime(filtri.ToInterventiDate.Year, filtri.ToInterventiDate.Month, DateTime.DaysInMonth(filtri.ToInterventiDate.Year, filtri.ToInterventiDate.Month), 23, 59, 59);
@@ -705,7 +705,7 @@ namespace FatturazioneContratti.Invoicing
                     f.LastSubId = righePerFattura.TryGetValue(f.SaleDocId, out int nRigheFattura) ? nRigheFattura : 0;
 
                 // Bulk Insert transazionale
-                if (efMaSaleDoc.Any())
+                if (efMaSaleDoc.Count != 0)
                 {
                     bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_ordiniCntx, () =>
                     {
