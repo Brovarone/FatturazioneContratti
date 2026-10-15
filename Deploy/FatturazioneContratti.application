@@ -8,7 +8,7 @@
         <beforeApplicationStartup />
       </update>
     </subscription>
-    <deploymentProvider codebase="https://raw.githubusercontent.com/Brovarone/FatturazioneContratti/refactor-genera-righe-ordine/Deploy/FatturazioneContratti.application" />
+    <deploymentProvider codebase="https://raw.githubusercontent.com/Brovarone/FatturazioneContratti/master/Deploy/FatturazioneContratti.application" />
   </deployment>
   <compatibleFrameworks xmlns="urn:schemas-microsoft-com:clickonce.v2">
     <framework targetVersion="4.5" profile="Full" supportedRuntime="4.0.30319" />
@@ -21,7 +21,7 @@
           <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
         </dsig:Transforms>
         <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-        <dsig:DigestValue>QFQ4Xn089PV2UqsoZ0FB5R6VuFW+AIkoI0nxbkTUoeU=</dsig:DigestValue>
+        <dsig:DigestValue>qFTItb/e7gVEHQROXIwLsSy8lm2Qw5gr3BcgNkY/HjQ=</dsig:DigestValue>
       </hash>
     </dependentAssembly>
   </dependency>

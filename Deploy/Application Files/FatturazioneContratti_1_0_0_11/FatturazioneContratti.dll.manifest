@@ -135,13 +135,13 @@
       <dsig:DigestValue>DLtfE7wy4XeWmmS/wD3UcZDp7w9CX3cFmJmvfUGPjGM=</dsig:DigestValue>
     </hash>
   </file>
-  <file name="FatturazioneContratti.dll" size="1308160">
+  <file name="FatturazioneContratti.dll" size="1309184">
     <hash>
       <dsig:Transforms>
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>ewBXXI2iv+pkhb7xmo7KUrMNu+ZGuPlGQxYFTZ61L0c=</dsig:DigestValue>
+      <dsig:DigestValue>B3m9tQBRpilp0uTAnqkgZHJCilJvvmj6T3dqyJtcGNs=</dsig:DigestValue>
     </hash>
   </file>
   <file name="FatturazioneContratti.exe" size="166912">
@@ -150,7 +150,7 @@
         <dsig:Transform Algorithm="urn:schemas-microsoft-com:HashTransforms.Identity" />
       </dsig:Transforms>
       <dsig:DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha256" />
-      <dsig:DigestValue>VGEWmMN9G/fBpfrucsSw5N1oXgxUbGa7vcotCCBtERM=</dsig:DigestValue>
+      <dsig:DigestValue>ARz2McuryQOsBnnJ0gP67FF2FQbWrEHRFNSKbM54Lkg=</dsig:DigestValue>
     </hash>
   </file>
   <file name="FatturazioneContratti.ico" size="15406">
