@@ -29,6 +29,8 @@
             moduliToolStripMenuItem = new ToolStripMenuItem();
             contrattiFatturazioneToolStripMenuItem = new ToolStripMenuItem();
             pagheToolStripMenuItem = new ToolStripMenuItem();
+            aiutoToolStripMenuItem = new ToolStripMenuItem();
+            informazioniToolStripMenuItem = new ToolStripMenuItem();
             grpAzioni = new GroupBox();
             btnAllineaFattureOrdini = new Button();
             btnConsuntivi = new Button();
@@ -47,7 +49,7 @@
             // 
             // menuStripPrincipal
             // 
-            menuStripPrincipal.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem, strumentiToolStripMenuItem, moduliToolStripMenuItem });
+            menuStripPrincipal.Items.AddRange(new ToolStripItem[] { fileToolStripMenuItem, strumentiToolStripMenuItem, moduliToolStripMenuItem, aiutoToolStripMenuItem });
             menuStripPrincipal.Location = new Point(0, 0);
             menuStripPrincipal.Name = "menuStripPrincipal";
             menuStripPrincipal.Padding = new Padding(7, 2, 0, 2);
@@ -131,6 +133,20 @@
             pagheToolStripMenuItem.Size = new Size(192, 22);
             pagheToolStripMenuItem.Text = "Flusso &Paghe";
             pagheToolStripMenuItem.Click += pagheToolStripMenuItem_Click;
+            // 
+            // aiutoToolStripMenuItem
+            // 
+            aiutoToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { informazioniToolStripMenuItem });
+            aiutoToolStripMenuItem.Name = "aiutoToolStripMenuItem";
+            aiutoToolStripMenuItem.Size = new Size(24, 20);
+            aiutoToolStripMenuItem.Text = "?";
+            // 
+            // informazioniToolStripMenuItem
+            // 
+            informazioniToolStripMenuItem.Name = "informazioniToolStripMenuItem";
+            informazioniToolStripMenuItem.Size = new Size(232, 22);
+            informazioniToolStripMenuItem.Text = "&Informazioni su FatturazioneContratti...";
+            informazioniToolStripMenuItem.Click += informazioniToolStripMenuItem_Click;
             // 
             // grpAzioni
             // 
@@ -308,6 +324,8 @@
         private System.Windows.Forms.ToolStripMenuItem moduliToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem contrattiFatturazioneToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pagheToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem aiutoToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem informazioniToolStripMenuItem;
         private System.Windows.Forms.GroupBox grpAzioni;
         private System.Windows.Forms.Button btnAllineaFattureOrdini;
         private System.Windows.Forms.Button btnConsuntivi;

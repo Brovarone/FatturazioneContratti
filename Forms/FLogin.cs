@@ -75,6 +75,18 @@ namespace FatturazioneContratti.Forms
             MessageBox.Show("Modulo Paghe in fase di migrazione.", "Modulo Paghe", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
+        private void informazioniToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            string versione = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "?";
+            MessageBox.Show(
+                $"FatturazioneContratti{Environment.NewLine}Versione {versione}{Environment.NewLine}{Environment.NewLine}" +
+                $"Database attivo: {AppConfig.DatabaseInUse}{Environment.NewLine}" +
+                "Automazione fatturazione contratti di servizio su Mago.net.",
+                "Informazioni su FatturazioneContratti",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+
         public FLogin()
         {
             InitializeComponent();
