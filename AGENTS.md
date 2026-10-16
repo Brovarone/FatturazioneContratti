@@ -52,7 +52,7 @@ Tutte le impostazioni runtime in `AppConfig` (classe statica, JSON-backed):
 | `BulkPersistenceHelper` | Wrapper `EFCore.BulkExtensions`; esegue `BulkInsert`/`BulkUpdate`/`BulkInsertOrUpdate` in transazione con `DBCC TRACEON(610)` per minimal logging |
 
 ### Servizi (`Orders/`, `Invoicing/`)
-- **OrderGenerationService** (partial, file `.cs` + `.Istat.cs`) — `GeneraRigheOrdine(GeneraRigheOrdineOptions)`, `AdeguaIstatOrdine()`
+- **GenerazioneRigheOrdiniService** (partial, file `.cs` + `.Istat.cs`) — `GeneraRigheOrdine(GeneraRigheOrdineOptions)`, `AdeguaIstatOrdine()`
   - Firma a record unico: `GeneraRigheOrdineOptions` raggruppa filtri, `DimensioneBlocco` e callback (log, stato, 2 progress)
   - Corpo scomposto: `ApplicaFiltriComuni` / `EstraiIdsOrdini` (condivisi con ISTAT) + `CaricaDefaultVenditeIva`
   - Stato mutabile in `StatoElaborazioneOrdini` (collettori + accumulatori log) e `StatoOrdine` (contatori per singolo ordine); elaborazione in `ElaboraOrdine` / `ElaboraContratto`
@@ -63,7 +63,7 @@ Tutte le impostazioni runtime in `AppConfig` (classe statica, JSON-backed):
 - **ConsuntivoService** — `ControllaFlussoIntegra()` (valida interventi), `GeneraFattureConsuntivo()` (bulk-insert fatture)
   - Usa mapping hardcoded: `FilialiMapping`, `MappingsEventoIntegra`, `CausaliPagamentoFatturaElettronica`
   - Logica raggruppamento fatture in `Break()` — rispetta flag `MaSalesOrdParameters` fulfillment break
-- **FattureDaOrdiniService** — classe `static`, `UPDATE` SQL raw join `MA_SaleDocDetail` → `MA_SaleOrdDetails`, con `SqlConnection`/`SqlTransaction` ricevuti dal caller
+- **AggiornamentoFattureService** — classe `static`, `UPDATE` SQL raw join `MA_SaleDocDetail` → `MA_SaleOrdDetails`, con `SqlConnection`/`SqlTransaction` ricevuti dal caller
   - Resta raw di proposito (l'`UPDATE ... FROM` su 3 tabelle è scomodo in EF), ma i valori sono presi dagli enum `MagoEnum` e il timestamp è unico per operazione
   - Unico residuo raw: i **nomi di tabella/colonna**, non tipizzati dal compilatore
 
@@ -107,7 +107,7 @@ Nessun test automatico. Verifica manuale via UI:
 Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 - `EnableDetailedErrors()` → rivela **nome colonna** contenente NULL
 - `EnableSensitiveDataLogging()` → mostra valori parametri
-- `OrderGenerationService` passa auto a scan diagnostico per-order su `SqlNullValueException`
+- `GenerazioneRigheOrdiniService` passa auto a scan diagnostico per-order su `SqlNullValueException`
 
 ## Convenzioni Critiche & Trappole
 
@@ -117,7 +117,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 4. **Connection string** — Costruita a runtime da `AppConfig`; niente `appsettings.json`. `TrustServerCertificate=true` per dev locale.
 5. **ARITHABORT ON** — Obbligatorio per qualsiasi `SqlConnection` raw (indici filtrati Mago lo richiedono). `SqlTools.OpenDirectConnection()` lo gestisce.
 6. **Pattern Prototype** — `context.AddNew<T>()` restituisce entità con tutti i default Fluent API materializzati. Clonarla via `.CloneFromPrototype()` per ogni nuova riga. Evita overhead change-tracker EF.
-7. **Caricamento a chunk** — `OrderGenerationService.LoadOrdersChunkByOrIn` costruisce `Expression<Func<MaSaleOrd,bool>>` predicato OR per batch ID. Evita esplosione cartesiana da `Include` su set grandi.
+7. **Caricamento a chunk** — `GenerazioneRigheOrdiniService.LoadOrdersChunkByOrIn` costruisce `Expression<Func<MaSaleOrd,bool>>` predicato OR per batch ID. Evita esplosione cartesiana da `Include` su set grandi.
 8. **Niente DI / IoC** — Servizi istanziati manualmente in `FLogin` con `SqlTools.CreateContext()` + `AppConfig.LoginId`.
 9. **Commenti/logica in italiano** — Commenti business logic in italiano; preservarli modificando codice calcolo.
 10. **Timestamp unico per operazione** — Non chiamare `DateTime.Now` a ogni riga: i servizi di istanza lo catturano in un campo `_now` (inizializzato nel costruttore), quelli `static` in una locale a inizio metodo. Mai `static readonly`: in un'app WinForms long-lived congelerebbe il valore al primo avvio.

@@ -13,7 +13,7 @@ using System.Text;
 
 namespace FatturazioneContratti.Orders
 {
-    public partial class OrderGenerationService(FattureContext context, int loginId)
+    public partial class GenerazioneRigheOrdiniService(FattureContext context, int loginId)
     {
         private readonly FattureContext _context = context;
         private readonly int _loginId = loginId;

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FatturazioneContratti.Orders
 {
-    public partial class OrderGenerationService
+    public partial class GenerazioneRigheOrdiniService
     {
         /// <summary>
         /// Causale attività usata per le righe di adeguamento ISTAT quando

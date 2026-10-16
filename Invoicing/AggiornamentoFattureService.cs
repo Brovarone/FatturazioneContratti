@@ -7,7 +7,7 @@ using Microsoft.Data.SqlClient;
 
 namespace FatturazioneContratti.Invoicing
 {
-    public static class FattureDaOrdiniService
+    public static class AggiornamentoFattureService
     {
         /// <summary>
         /// Allinea date/nr canoni delle righe fattura da quelle della riga ordine.

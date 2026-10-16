@@ -17,7 +17,7 @@ non committate). Le voci eseguite sono spuntate `[x]` e riportate in §5.*
   (combo UI/File/Entrambi — NOTA: refuso "Entambi" in `Forms/FSettings.cs:44`).
   `FLogin.Log(string)` ora instrada su `LogMode` (`Forms/FLogin.cs:357-361`).
 - MA i servizi chiamano ancora il log con target esplicito `LogTarget.Ui`
-  (`Orders/OrderGenerationService.cs`, `Orders/OrderGenerationService.Istat.cs`,
+  (`Orders/GenerazioneRigheOrdiniService.cs`, `Orders/GenerazioneRigheOrdiniService.Istat.cs`,
   `Invoicing/ConsuntivoService.cs`, `Common/BulkPersistenceHelper.cs`), quindi le
   righe operative dei servizi restano solo su UI. Sul file arrivano solo i messaggi
   di `FLogin` (avvio/completato/errori): il file non è più *sempre* vuoto, ma non
@@ -56,7 +56,7 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   resta autodescrittivo.
 - `progress2` in `ControllaFlussoIntegra`/`GeneraFattureConsuntivo`: **non rimossa**,
   va **abilitata con la logica a blocchi da 100 record** (progress1 = blocchi,
-  progress2 = record nel blocco, come `OrderGenerationService`).
+  progress2 = record nel blocco, come `GenerazioneRigheOrdiniService`).
 
 **Step — TUTTI ESEGUITI il 16/10/2026** (build: 0 errori, warning invariati ~1816):
 
@@ -81,7 +81,7 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   - [x] `finally` → `Scarica(bulk: bulkMessage, debugging: debugging)`
   - [x] `progress2` con blocchi da 100 + `Finish()` finale (mancava del tutto)
   - [x] via `using static ...DbLoggerCategory`; via `errori` (non serviva più)
-- [x] **C. `OrderGenerationService.cs` + `.Istat.cs`**
+- [x] **C. `GenerazioneRigheOrdiniService.cs` + `.Istat.cs`**
   - [x] log filtri all'avvio di entrambi → LogMode
   - [x] informativi `Ui` → LogMode; errori/crash → `Both` (wrapper scansione diagnostica
         `LoadOrdersChunkByOrIn`, percentuale ISTAT = 0, catch)
@@ -98,7 +98,7 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
         di business) — aggiornati i 3 call site
   - [x] `Common/LogDiagnostica.cs`: `Informativo` / `Errore(string|Exception)` / `Avviso`
         / `LogFiltri` / `Scarica` + `Common/ILogFiltri.cs` implemented da i 3 DTO filtri
-- [x] **E. `FattureDaOrdiniService` + `FLogin`**
+- [x] **E. `AggiornamentoFattureService` + `FLogin`**
   - [x] `out resultMessage` **rimosso**: il servizio logga da solo (filtri → LogMode,
         esito `Adeguate N righe` → LogMode, eccezione → `Both` + stack a file); `FLogin`
         passa solo `logMessage: Log`
@@ -123,7 +123,7 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
 ## 2. Punti lasciati in sospeso (segnalati in revisione, NON applicati)
 
 ### Punto 3 — `continue` su attività fatturata salta altre tipologie
-- File: `Orders/OrderGenerationService.Istat.cs:176-180` e `Orders/OrderGenerationService.cs:555` e `:594`
+- File: `Orders/GenerazioneRigheOrdiniService.Istat.cs:176-180` e `Orders/GenerazioneRigheOrdiniService.cs:555` e `:594`
 - `if (att.Fatturata == "1") continue;` interrompe l'analisi delle restanti
   tipologie (Annullamento/Istat) della **stessa** attività.
 - DA VERIFICARE sui dati reali: un'attività può essere contemporaneamente
@@ -139,7 +139,7 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
 
 ## 3. Altri punti del report originale non toccati (22-25 e minimi)
 
-### Punto 22 — `OrderGenerationService.GeneraRigheOrdine` era un metodo di ~300 righe (COMPLETATO)
+### Punto 22 — `GenerazioneRigheOrdiniService.GeneraRigheOrdine` era un metodo di ~300 righe (COMPLETATO)
 - [x] Fase A — estrazioni a basso rischio: `ApplicaFiltriComuni` (riuso anche da
   `AdeguaIstatOrdine`), `EstraiIdsOrdini`, `record DefaultVenditeIva` +
   `CaricaDefaultVenditeIva`.
@@ -160,7 +160,7 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
 - `Invoicing/ConsuntivoService.cs`: `Break(..., customer, ...)` può ricevere null
   (warning CS8604) → annotare firme.
 - `MiniDistinta` (ConsuntivoService.cs): proprietà non inizializzate (CS8618).
-- `OrderGenerationService.cs`: warning CS8604 su `EseguiSalvataggioTransazionale`
+- `GenerazioneRigheOrdiniService.cs`: warning CS8604 su `EseguiSalvataggioTransazionale`
   (`logMessage` null-passabile).
 
 ### Punto 25 — dettagli minori
@@ -180,7 +180,7 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
 - [x] `Common/FattureContextExtensions.cs`: cache `Initializers` ora a due livelli
   `IModel -> Type` (prima solo `Type`, quindi legata al primo DbContext visto:
   applicava i default del primo modello a contesti con modello diverso).
-- [x] `Invoicing/FattureDaOrdiniService.cs`: resta SQL raw di proposito (UPDATE...FROM con
+- [x] `Invoicing/AggiornamentoFattureService.cs`: resta SQL raw di proposito (UPDATE...FROM con
   join su 3 tabelle, scomoda da esprimere con EF), ma allineato al resto del progetto:
   valori `LineType`/`DocumentType` presi dagli enum `Common/MagoEnum.cs` invece dei numeri
   hardcoded, e timestamp unico per operazione (`now` a inizio metodo, come il campo `_now`
@@ -197,7 +197,7 @@ Nessun test automatico. Da provare via UI con DB di test:
 3. **Consuntivazione** (**la più a rischio**): raggruppamento fatture ristrutturato,
    ID documento assegnato solo ai gruppi con righe (nessuna testa vuota, nessun
    buco nel numeratore), cross-ref e ritenuta solo con righe, `LastSubId` via GroupBy,
-4. **Allineamento Fatture** — ATTENZIONE: non più "non toccato": `FattureDaOrdiniService`
+4. **Allineamento Fatture** — ATTENZIONE: non più "non toccato": `AggiornamentoFattureService`
    ora prende `FiltriAllineamentoFatture` + nuova dialog `FAskFiltriAllineamentoFatture`
    (modifiche non committate) → da riverificare via UI come gli altri.
 5. **Log (§1b, 16/10/2026)** — per ogni workflow verificare su DB test:
@@ -219,19 +219,19 @@ Nessun test automatico. Da provare via UI con DB di test:
 | # | Fix | File |
 |---|-----|------|
 | 1 | `PathPaghe` persistito in `Save`/`Load`/`ConfigData` | `Config/AppConfig.cs` |
-| 2 | Riga attività ISTAT con pattern prototipo `AddNew` | `Orders/OrderGenerationService.Istat.cs` |
+| 2 | Riga attività ISTAT con pattern prototipo `AddNew` | `Orders/GenerazioneRigheOrdiniService.Istat.cs` |
 | 4 | Testa fattura/cross-ref/ritenuta solo se il gruppo ha righe; ID documento assegnato alla prima riga utile | `Invoicing/ConsuntivoService.cs` |
 | 5 | `MaIdnumbers.FirstOrDefault` + errore esplicito | `Invoicing/ConsuntivoService.cs` |
-| 6 | Causale attività ISTAT dalla UI (`TxtIstatAttivita` → `FiltriOrdini.CausaleAttivita`) con fallback `CausaleAttivitaIstatDefault = "ISTAT"` | `Orders/OrderGenerationService.Istat.cs`, `Forms/FAskFiltriOrdini.cs`, `Orders/FiltriOrdini.cs` |
+| 6 | Causale attività ISTAT dalla UI (`TxtIstatAttivita` → `FiltriOrdini.CausaleAttivita`) con fallback `CausaleAttivitaIstatDefault = "ISTAT"` | `Orders/GenerazioneRigheOrdiniService.Istat.cs`, `Forms/FAskFiltriOrdini.cs`, `Orders/FiltriOrdini.cs` |
 | 7 | `TbcreatedId/TbmodifiedId = _loginId` su righe descrittive fattura | `Invoicing/ConsuntivoService.cs` |
 | 9 | `aOrdini` da lista già materializzata (no doppia query) | `Invoicing/ConsuntivoService.cs` |
 | 10 | Rimosso `.Load()` duplicato su MaCustSupp | `Invoicing/ConsuntivoService.cs` |
 | 11 | Join distinte via `ToLookup` + `FilialeCorrisponde` (O(N+M)) | `Invoicing/ConsuntivoService.cs` |
 | 12 | `LastSubId` con `GroupBy().ToDictionary()` | `Invoicing/ConsuntivoService.cs` |
-| 13 | ISTAT: ID-first + chunking con loader condiviso | `Orders/OrderGenerationService.Istat.cs`, `OrderGenerationService.cs` |
-| 15 | `catch` quando-limitato a `SqlNullValueException` | `Orders/OrderGenerationService.cs` |
+| 13 | ISTAT: ID-first + chunking con loader condiviso | `Orders/GenerazioneRigheOrdiniService.Istat.cs`, `GenerazioneRigheOrdiniService.cs` |
+| 15 | `catch` quando-limitato a `SqlNullValueException` | `Orders/GenerazioneRigheOrdiniService.cs` |
 | 17 | `AppConfig.LastLoadError` + `Debug.WriteLine` su config illeggibile | `Config/AppConfig.cs` |
-| 18 | Timestamp unici per operazione (campo `_now`) | `OrderGenerationService*.cs`, `ConsuntivoService.cs` |
+| 18 | Timestamp unici per operazione (campo `_now`) | `GenerazioneRigheOrdiniService*.cs`, `ConsuntivoService.cs` |
 | 20 | Rimosso `Common/DbDefaults.cs` (morto) | `Common/` |
 | 21 | Rimossi codice morti: `PrecaricaTabelleOrdini`, `protoAllordCliAttivita`, wrapper log ridondante, campo `perc` | vari |
 | 14 | Cache statica property per tipo in `CloneFromPrototype` | `Common/EntityCloner.cs` |
@@ -240,13 +240,13 @@ Nessun test automatico. Da provare via UI con DB di test:
 | L1 | `LogMode` default `Both` + persistenza `Load`/`Save`/`ConfigData` + combo in `FSettings` | `Config/AppConfig.cs`, `Forms/FSettings.cs` (+Designer) |
 | L2 | `FLogin.Log(string)` instrada su `LogMode`; file di log creato (anche vuoto) in `FLogin_Load` | `Forms/FLogin.cs` |
 | 8 | `PostToUi` + `_inElaborazione` volatile; handler globali eccezioni + `CrashLogger` | `Forms/FLogin.cs`, `Program.cs`, `Common/CrashLogger.cs` |
-| 23a | `CreaRigaDescrittiva`/`CreaRigaRiferimento` unificate in `CreaRigaNota` | `Orders/OrderGenerationService.cs` |
-| 23c | `SubstringSafe` estratto in `Common/StringHelpers` (rimosso privato + ternario inline in consuntivo) | `Common/StringHelpers.cs`, `Orders/OrderGenerationService.cs`, `Invoicing/ConsuntivoService.cs` |
+| 23a | `CreaRigaDescrittiva`/`CreaRigaRiferimento` unificate in `CreaRigaNota` | `Orders/GenerazioneRigheOrdiniService.cs` |
+| 23c | `SubstringSafe` estratto in `Common/StringHelpers` (rimosso privato + ternario inline in consuntivo) | `Common/StringHelpers.cs`, `Orders/GenerazioneRigheOrdiniService.cs`, `Invoicing/ConsuntivoService.cs` |
 | 23b | `ProgressCallbacks` centralizzati in factory `FLogin.CreaProgress` | `Forms/FLogin.cs` |
-| A4 | Allineamento: nuova dialog `FAskFiltriAllineamentoFatture` (date da/a + radio "Tutti i numeri" / "Intervallo primo-ultimo"); firma `AdeguaFattureDaOrdini` ora riceve `FiltriAllineamentoFatture` (`AllNumbers`, `NrFirst`, `NrLast`) | `Invoicing/FattureDaOrdiniService.cs`, `Invoicing/FiltriAllineamentoFatture.cs`, `Forms/FAskFiltriAllineamentoFatture*.cs`, `Forms/FLogin.cs` |
+| A4 | Allineamento: nuova dialog `FAskFiltriAllineamentoFatture` (date da/a + radio "Tutti i numeri" / "Intervallo primo-ultimo"); firma `AdeguaFattureDaOrdini` ora riceve `FiltriAllineamentoFatture` (`AllNumbers`, `NrFirst`, `NrLast`) | `Invoicing/AggiornamentoFattureService.cs`, `Invoicing/FiltriAllineamentoFatture.cs`, `Forms/FAskFiltriAllineamentoFatture*.cs`, `Forms/FLogin.cs` |
 | 25 | Rimossi assegnamenti ridondanti (0/false) dai costruttori, default in inizializzatori di proprietà | `Orders/CurOrdRow.cs`, `Orders/CurOrd.cs`, `Invoicing/CurFatt.cs`, `Invoicing/CurFattRow.cs` |
 | 25b | `SingoloOrdine`/`NrMese` cablati nelle query consuntivo (+ `NrOrdine` in DTO e UI) | `Invoicing/ConsuntivoService.cs`, `Invoicing/FiltriOrdiniConsuntivo.cs`, `Forms/FAskFiltriOrdiniConsuntivo*.cs` |
-| 22 | `GeneraRigheOrdine` scomposto: filtri/ID/default condivisi, `StatoElaborazioneOrdini`+`StatoOrdine`, `ElaboraOrdine`/`ElaboraContratto`, iterator a blocchi, `record GeneraRigheOrdineOptions`, rimosso `progress3` | `Orders/OrderGenerationService*.cs`, `Orders/DefaultVenditeIva.cs`, `Orders/GeneraRigheOrdineOptions.cs`, `Invoicing/ConsuntivoService.cs`, `Forms/FLogin.cs` |
+| 22 | `GeneraRigheOrdine` scomposto: filtri/ID/default condivisi, `StatoElaborazioneOrdini`+`StatoOrdine`, `ElaboraOrdine`/`ElaboraContratto`, iterator a blocchi, `record GeneraRigheOrdineOptions`, rimosso `progress3` | `Orders/GenerazioneRigheOrdiniService*.cs`, `Orders/DefaultVenditeIva.cs`, `Orders/GeneraRigheOrdineOptions.cs`, `Invoicing/ConsuntivoService.cs`, `Forms/FLogin.cs` |
 
 > Le righe L1, L2, 8, 22, 23a, 23b, 23c, A4 sono state **committate** il 13-14/10/2026
 > (commit su `master` + branch `feature/refactor-genera-righe-ordine`) — resta la verifica
@@ -263,8 +263,8 @@ Nessun test automatico. Da provare via UI con DB di test:
 | L5 | Rollback bulk → `Errore(log, ex)` + riga rollback `Both`; rimosso il parametro `logBuilder` (l'errore non viene più duplicato negli accumulatori del caller) | `Common/BulkPersistenceHelper.cs` + 3 call site |
 | L6 | `ControllaFlussoIntegra`: filtri in log, contatore `associati`, esito sempre emesso, anomalia con **riga contatori su UI + dettaglio su file una volta sola**, voci anomalia con evento/filiale/data, `catch` con stack, `progress2` a blocchi da 100, via `errori` morto e `Debug.WriteLine`, `TBModifiedID = _loginId` | `Invoicing/ConsuntivoService.cs` |
 | L7 | `GeneraFattureConsuntivo`: filtri in log, `MA_IdNumbers` mancante → `Both`, successo con testate **e righe**, `catch` con stack, `finally` che scarica `bulkMessage`/`debugging`, `progress2` a blocchi da 100 + `Finish` (mancava), via `errori` e `using` inutile | `Invoicing/ConsuntivoService.cs` |
-| L8 | `GeneraRigheOrdine`/`AdeguaIstatOrdine`: filtri in log, informativi `Ui`→`LogMode`, errori `Ui`→`Both`, `finally` con `Scarica` (finalmente `stato.Errori` viene stampato), `EseguiSalvataggioTransazionale` **ritorna `bool`**, `[COMPLETATO]` solo senza errori | `Orders/OrderGenerationService.cs`, `Orders/OrderGenerationService.Istat.cs` |
-| L9 | Allineamento: rimosso `out resultMessage` → il servizio logga filtri, esito e eccezione (con stack); `FLogin` passa `logMessage: Log`. Interruzione controllo → `Both`; nuova riga `Database: X [TEST] - Modalità log: Y` in apertura | `Invoicing/FattureDaOrdiniService.cs`, `Forms/FLogin.cs` |
+| L8 | `GeneraRigheOrdine`/`AdeguaIstatOrdine`: filtri in log, informativi `Ui`→`LogMode`, errori `Ui`→`Both`, `finally` con `Scarica` (finalmente `stato.Errori` viene stampato), `EseguiSalvataggioTransazionale` **ritorna `bool`**, `[COMPLETATO]` solo senza errori | `Orders/GenerazioneRigheOrdiniService.cs`, `Orders/GenerazioneRigheOrdiniService.Istat.cs` |
+| L9 | Allineamento: rimosso `out resultMessage` → il servizio logga filtri, esito e eccezione (con stack); `FLogin` passa `logMessage: Log`. Interruzione controllo → `Both`; nuova riga `Database: X [TEST] - Modalità log: Y` in apertura | `Invoicing/AggiornamentoFattureService.cs`, `Forms/FLogin.cs` |
 | L10 | Pulizie: via `LogToUi`/`LogToFile`, via `CostruisciFiltriLog()` nei form (a carico dei servizi) | `Forms/FLogin.cs`, `Forms/FAskFiltriOrdini.cs`, `Forms/FAskFiltriOrdiniConsuntivo.cs` |
 
 Modifiche non committate. Refuso "Entambi" in `FSettings`: **già corretto** in origine.

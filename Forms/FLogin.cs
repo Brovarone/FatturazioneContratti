@@ -164,7 +164,7 @@ namespace FatturazioneContratti.Forms
             EseguiOperazione("Generazione Canoni da Ordini", () =>
             {
                 using var ctx = SqlTools.CreateContext();
-                var service = new OrderGenerationService(ctx, AppConfig.LoginId);
+                var service = new GenerazioneRigheOrdiniService(ctx, AppConfig.LoginId);
 
                 return service.GeneraRigheOrdine(new GeneraRigheOrdineOptions(
                     filtri,
@@ -191,7 +191,7 @@ namespace FatturazioneContratti.Forms
             EseguiOperazione("Adeguamento ISTAT", () =>
             {
                 using var ctx = SqlTools.CreateContext();
-                var service = new OrderGenerationService(ctx, AppConfig.LoginId);
+                var service = new GenerazioneRigheOrdiniService(ctx, AppConfig.LoginId);
 
                 return service.AdeguaIstatOrdine(
                     filtri,
@@ -273,7 +273,7 @@ namespace FatturazioneContratti.Forms
                 using var conn = SqlTools.OpenDirectConnection();
                 using var trans = conn.BeginTransaction();
 
-                bool ok = FattureDaOrdiniService.AdeguaFattureDaOrdini(
+                bool ok = AggiornamentoFattureService.AdeguaFattureDaOrdini(
                     conn,
                     trans,
                     filtri,

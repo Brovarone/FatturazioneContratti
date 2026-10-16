@@ -202,7 +202,7 @@ namespace FatturazioneContratti.Invoicing
 
                 LogDiagnostica.Informativo(logMessage, $"Interventi estratti: {allInterventi.Count}");
 
-                // Progress a blocchi da 100 record (stessa logica di OrderGenerationService):
+                // Progress a blocchi da 100 record (stessa logica di GenerazioneRigheOrdiniService):
                 // barra grande = blocchi, barra piccola = record del blocco corrente.
                 int numeroBlocchi = Math.Max(1, (allInterventi.Count + DimensioneBlocco - 1) / DimensioneBlocco);
                 progress1?.Init(0, numeroBlocchi);
@@ -444,7 +444,7 @@ namespace FatturazioneContratti.Invoicing
                     .ThenBy(o => o.Carrier1)
                     .ToList();
 
-                // Progress a blocchi da 100 record (stessa logica di OrderGenerationService):
+                // Progress a blocchi da 100 record (stessa logica di GenerazioneRigheOrdiniService):
                 // barra grande = blocchi, barra piccola = ordini del blocco corrente.
                 int numeroBlocchi = Math.Max(1, (ordiniList.Count + DimensioneBlocco - 1) / DimensioneBlocco);
                 progress1?.Init(0, numeroBlocchi);

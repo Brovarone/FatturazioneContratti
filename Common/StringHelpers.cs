@@ -2,7 +2,7 @@ namespace FatturazioneContratti.Common
 {
     /// <summary>
     /// Helper stringhe condiviso (ex duplicato: <c>SubstringSafe</c> privato in
-    /// <c>OrderGenerationService</c> + ternario inline in <c>ConsuntivoService</c>).
+    /// <c>GenerazioneRigheOrdiniService</c> + ternario inline in <c>ConsuntivoService</c>).
     /// </summary>
     public static class StringHelpers
     {
