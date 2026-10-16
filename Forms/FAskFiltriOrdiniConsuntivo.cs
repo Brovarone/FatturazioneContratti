@@ -259,7 +259,8 @@ namespace FatturazioneContratti.Forms
                 Riassegna = ChkRiassegna.Checked
             };
 
-            filtri.CostruisciFiltriLog();
+            // Nota: la descrizione dei filtri per il log la costruisce il servizio
+            // (LogDiagnostica.LogFiltri) all'avvio di ogni step del workflow.
             return filtri;
         }
     }

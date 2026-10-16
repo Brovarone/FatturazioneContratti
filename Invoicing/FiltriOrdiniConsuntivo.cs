@@ -1,3 +1,4 @@
+using FatturazioneContratti.Common;
 using System;
 using System.Text;
 
@@ -17,7 +18,7 @@ namespace FatturazioneContratti.Invoicing
         SoloFattura = 2
     }
 
-    public class FiltriOrdiniConsuntivo
+    public class FiltriOrdiniConsuntivo : ILogFiltri
     {
         public DateTime FromInterventiDate { get; set; }
         public DateTime ToInterventiDate { get; set; }

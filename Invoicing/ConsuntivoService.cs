@@ -9,7 +9,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory;
 
 namespace FatturazioneContratti.Invoicing
 {
@@ -27,6 +26,13 @@ namespace FatturazioneContratti.Invoicing
         private const string RegIvaPosticipate = "V2";
         private const string TecnoAll1 = "NOLEGGIO SPA";
         private const string EstateSicura = "ESTATE";
+
+        /// <summary>
+        /// Dimensione dei blocchi per le progress (stesso default di
+        /// <c>GeneraRigheOrdineOptions.DimensioneBlocco</c>): barra grande = blocchi,
+        /// barra piccola = record del blocco.
+        /// </summary>
+        private const int DimensioneBlocco = 100;
 
         public ConsuntivoService(FattureContext ordiniCntx, int loginId)
         {
@@ -120,14 +126,18 @@ namespace FatturazioneContratti.Invoicing
             ProgressCallbacks? progress1 = null,
             ProgressCallbacks? progress2 = null)
         {
-            var errori = new StringBuilder();
             var fatalContrattoErrorList = new List<string>();
             var fatalEventoErrorList = new List<string>();
             var contrattoErrorList = new List<string>();
             var eventoErrorList = new List<string>();
+            int associati = 0;   // interventi agganciati a una riga contratto con esito positivo
 
             try
             {
+                // I filtri della run vengono registrati a file/UI: senza questo il log
+                // di sessione non dice mai con quali parametri è partito il controllo.
+                LogDiagnostica.LogFiltri(logMessage, filtri);
+
                 updateStatus?.Invoke("Estrazione distinte e interventi Integra...");
 
                 IQueryable<AllordCliContrattoDistinta> distintaQuery =
@@ -182,7 +192,7 @@ namespace FatturazioneContratti.Invoicing
                 var allInterventi = intQuery.ToList();
                 if (allInterventi.Count == 0)
                 {
-                    logMessage?.Invoke("Nessun intervento Integra da controllare.", AppConfig.LogTarget.Ui);
+                    LogDiagnostica.Informativo(logMessage, "Nessun intervento Integra da controllare.");
                     return true;
                 }
 
@@ -190,15 +200,28 @@ namespace FatturazioneContratti.Invoicing
                 // delle distinte per ogni intervento (O(interventi × distinte)).
                 var distintePerCodice = allDistinte.ToLookup(x => x.CodIntegra, StringComparer.OrdinalIgnoreCase);
 
-                logMessage?.Invoke($"Interventi estratti: {allInterventi.Count}", AppConfig.LogTarget.Ui);
-                // inizializzo progress principale
-                progress1?.Init(0, Math.Max(1, allInterventi.Count));
+                LogDiagnostica.Informativo(logMessage, $"Interventi estratti: {allInterventi.Count}");
+
+                // Progress a blocchi da 100 record (stessa logica di OrderGenerationService):
+                // barra grande = blocchi, barra piccola = record del blocco corrente.
+                int numeroBlocchi = Math.Max(1, (allInterventi.Count + DimensioneBlocco - 1) / DimensioneBlocco);
+                progress1?.Init(0, numeroBlocchi);
+                int indice = 0;
 
                 foreach (var i in allInterventi)
                 {
-                    // avanza la progress
-                    progress1?.Advance();
-                    Debug.WriteLine(i.Contratto);
+                    // Nuovo blocco: chiudo il precedente e riavvio la barra piccola
+                    if (indice % DimensioneBlocco == 0)
+                    {
+                        if (indice > 0)
+                        {
+                            progress2?.Finish();
+                            progress1?.Advance();
+                        }
+                        progress2?.Init(0, Math.Max(1, Math.Min(DimensioneBlocco, allInterventi.Count - indice)));
+                    }
+                    indice++;
+                    progress2?.Advance();
 
                     // Join per codice contratto indicizzato (lookup) + regola di mapping filiale
                     var distinteFiltrate = distintePerCodice[i.Contratto]
@@ -221,16 +244,19 @@ namespace FatturazioneContratti.Invoicing
                             i.MLineaContratto = row.RifRifLinea;
                             i.MLineaDistinta = row.RifLinea;
                             i.TBModified = _now;
-                            i.TBModifiedID = (int)AppConfig.LoginId;
+                            i.TBModifiedID = _loginId;
+                            associati++;
                         }
                         else if (allEventi.Count > 1)
                         {
-                            string err = $"Contratto {i.Contratto} Evento: {i.TipoEvento}";
+                            // Voce arricchita: nel file di log serve sapere QUALE intervento
+                            // ha fallito (evento, filiale, data), non solo il codice contratto.
+                            string err = DescriviIntervento(i);
                             if (!fatalEventoErrorList.Contains(err)) fatalEventoErrorList.Add(err);
                         }
                         else
                         {
-                            string err = $"Contratto {i.Contratto} Evento Assente: {i.TipoEvento}";
+                            string err = DescriviIntervento(i);
                             if (!eventoErrorList.Contains(err)) eventoErrorList.Add(err);
                         }
                     }
@@ -239,29 +265,41 @@ namespace FatturazioneContratti.Invoicing
                         // Per ogni distinta filtrata aggiungo alla lista l'entry con contratto + numero ordine
                         foreach (var d in distinteFiltrate)
                         {
-                            var entry = $"{i.Contratto} - Ordine {d.NrOrdine}";
+                            var entry = DescriviIntervento(i, d.NrOrdine);
                             if (!fatalContrattoErrorList.Contains(entry))
                                 fatalContrattoErrorList.Add(entry);                            
                         }
                     }
                     else
                     {
-                        if (!contrattoErrorList.Contains(i.Contratto)) contrattoErrorList.Add(i.Contratto);
+                        string err = DescriviIntervento(i);
+                        if (!contrattoErrorList.Contains(err)) contrattoErrorList.Add(err);
                     }
                 }
 
-                // finalize progress
+                // Chiude l'ultimo blocco e la barra generale
+                progress2?.Finish();
+                progress1?.Advance();
                 progress1?.Finish();
 
                 // Salvataggio aggiornamenti interventi
                 updateStatus?.Invoke("Salvataggio aggiornamenti interventi...");
                 _ordiniCntx.SaveChanges();
 
-                if (fatalContrattoErrorList.Count != 0 || fatalEventoErrorList.Count != 0 || contrattoErrorList.Count != 0 || eventoErrorList.Count != 0)
+                int anomalie = fatalContrattoErrorList.Count + fatalEventoErrorList.Count
+                             + contrattoErrorList.Count + eventoErrorList.Count;
+
+                // Esito sempre emesso: senza questa riga il log finiva con "Interventi estratti: N"
+                // e non si capiva mai quanti interventi erano stati agganciati.
+                LogDiagnostica.Informativo(logMessage,
+                    $"Controllo flusso completato: {allInterventi.Count} interventi, {associati} associati, {anomalie} anomalie");
+
+                if (anomalie != 0)
                 {
+                    string riepilogo = $"Contratti duplicati={fatalContrattoErrorList.Count}, Eventi multipli={fatalEventoErrorList.Count}, Contratti mancanti={contrattoErrorList.Count}, Eventi mancanti={eventoErrorList.Count}";
+
                     var dettaglio = new StringBuilder();
                     dettaglio.AppendLine("Riscontrate anomalie o incongruenze nel controllo flusso.");
-                    logMessage?.Invoke(dettaglio.ToString(), AppConfig.LogTarget.Ui);
                     dettaglio.AppendLine();
 
                     if (fatalContrattoErrorList.Count != 0)
@@ -292,9 +330,13 @@ namespace FatturazioneContratti.Invoicing
                         dettaglio.AppendLine();
                     }
 
-                    dettaglio.AppendLine($"Riepilogo: Contratti duplicati={fatalContrattoErrorList.Count}, Eventi multipli={fatalEventoErrorList.Count}, Contratti mancanti={contrattoErrorList.Count}, Eventi mancanti={eventoErrorList.Count}");
+                    dettaglio.AppendLine($"Riepilogo: {riepilogo}");
 
-                    // Scrive su UI e su file di log; se preferisci solo UI usa AppConfig.LogTarget.Ui
+                    // UI: una riga sola con i contatori (il dettaglio resterebbe illeggibile
+                    // nel ListBox). Va SOLO su UI: il file riceve il dettaglio completo
+                    // subito dopo, e con "Both" la testa finirebbe due volte nel log.
+                    logMessage?.Invoke($"Riscontrate anomalie o incongruenze nel controllo flusso. {riepilogo}", AppConfig.LogTarget.Ui);
+                    // File: dettaglio completo (sezioni + riepilogo), scritto UNA volta sola
                     logMessage?.Invoke(dettaglio.ToString(), AppConfig.LogTarget.File);
                     return false;
                 }
@@ -303,9 +345,21 @@ namespace FatturazioneContratti.Invoicing
             }
             catch (Exception ex)
             {
-                logMessage?.Invoke($"Errore durante il controllo del flusso Integra: {ex.Message}", AppConfig.LogTarget.Ui  );
+                LogDiagnostica.Errore(logMessage, ex);
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Descrizione completa di un intervento per le voci di anomalia: nel file di log
+        /// servono contratto, evento, filiale e data allarme per capire che cosa allineare.
+        /// </summary>
+        private static string DescriviIntervento(IntegraInterventi i, string? nrOrdine = null)
+        {
+            string testo = $"Contratto {i.Contratto}";
+            if (!string.IsNullOrWhiteSpace(nrOrdine)) testo += $" - ordine {nrOrdine}";
+            testo += $" - evento {i.TipoEvento} - filiale {i.Filiale} - allarme {i.InizioAllarme:dd/MM/yyyy}";
+            return testo;
         }
 
         #endregion
@@ -319,11 +373,14 @@ namespace FatturazioneContratti.Invoicing
             ProgressCallbacks? progress2 = null)
         {
             var bulkMessage = new StringBuilder();
-            var errori = new StringBuilder();
             var debugging = new StringBuilder();
 
             try
             {
+                // I filtri della run vengono registrati a file/UI: ogni step del workflow
+                // resta autodescrittivo nel log di sessione (anche dopo un controllo).
+                LogDiagnostica.LogFiltri(logMessage, filtri);
+
                 updateStatus?.Invoke("Estrazione ordini corrispondenti per consuntivazione...");
 
                 // Precaricamento tabelle core.
@@ -387,8 +444,11 @@ namespace FatturazioneContratti.Invoicing
                     .ThenBy(o => o.Carrier1)
                     .ToList();
 
-                // inizializzo progress principale per gli ordini
-                progress1?.Init(0, Math.Max(1, ordiniList.Count));
+                // Progress a blocchi da 100 record (stessa logica di OrderGenerationService):
+                // barra grande = blocchi, barra piccola = ordini del blocco corrente.
+                int numeroBlocchi = Math.Max(1, (ordiniList.Count + DimensioneBlocco - 1) / DimensioneBlocco);
+                progress1?.Init(0, numeroBlocchi);
+                int indice = 0;
 
                 var paramSaleOrd = _ordiniCntx.MaSalesOrdParameters.FirstOrDefault() ?? new MaSalesOrdParameters();
 
@@ -410,7 +470,7 @@ namespace FatturazioneContratti.Invoicing
                 var idNumbers = _ordiniCntx.MaIdnumbers.FirstOrDefault(k => k.CodeType == (int)IdType.DocVend);
                 if (idNumbers == null)
                 {
-                    logMessage?.Invoke("Contatore MA_IdNumbers per i documenti di vendita non trovato: impossibile generare le fatture.", AppConfig.LogTarget.Ui);
+                    LogDiagnostica.Errore(logMessage, "Contatore MA_IdNumbers per i documenti di vendita non trovato: impossibile generare le fatture.");
                     return false;
                 }
 
@@ -431,8 +491,18 @@ namespace FatturazioneContratti.Invoicing
 
                 foreach (var o in ordiniList)
                 {
-                    // avanza la progress
-                    progress1?.Advance();
+                    // Nuovo blocco: chiudo il precedente e riavvio la barra piccola
+                    if (indice % DimensioneBlocco == 0)
+                    {
+                        if (indice > 0)
+                        {
+                            progress2?.Finish();
+                            progress1?.Advance();
+                        }
+                        progress2?.Init(0, Math.Max(1, Math.Min(DimensioneBlocco, ordiniList.Count - indice)));
+                    }
+                    indice++;
+                    progress2?.Advance();
 
                     debugging.AppendLine($"Ordine: {o.InternalOrdNo} Cliente: {o.Customer}");
 
@@ -695,6 +765,13 @@ namespace FatturazioneContratti.Invoicing
                     }
                 }
 
+                // Chiudo l'ultimo blocco e la barra generale (non c'era nessun Finish:
+                // la progress restava a metà a fine elaborazione). Con lista vuota non
+                // c'è stato nessun blocco da chiudere: la barra piccola resta com'è.
+                if (indice > 0) progress2?.Finish();
+                progress1?.Advance();
+                progress1?.Finish();
+
                 // Aggiornamento LastSubId (conteggio raggruppato: il Count dentro il foreach
                 // era O(fatture x righe))
                 var righePerFattura = efMaSaleDocDetails
@@ -719,19 +796,26 @@ namespace FatturazioneContratti.Invoicing
                         // Aggiornamento contatore ID
                         idNumbers.LastId = saleDocId;
                         _ordiniCntx.SaveChanges();
-                    }, logMessage, errori);
+                    }, logMessage);
 
                     if (!esito) return false;
 
-                    logMessage?.Invoke($"Fatture generate con successo: {efMaSaleDoc.Count}", AppConfig.LogTarget.Ui);
+                    LogDiagnostica.Informativo(logMessage,
+                        $"Fatture generate con successo: {efMaSaleDoc.Count} testate, {efMaSaleDocDetails.Count} righe");
                 }
 
                 return true;
             }
             catch (Exception ex)
             {
-                logMessage?.Invoke($"Errore in GeneraFattureConsuntivo: {ex.Message}", AppConfig.LogTarget.Ui);
+                LogDiagnostica.Errore(logMessage, ex);
                 return false;
+            }
+            finally
+            {
+                // Statistiche bulk e tracciato diagnostico a fine passo, secondo la
+                // regola di routing di LogDiagnostica (gira su ogni uscita, compreso il return false).
+                LogDiagnostica.Scarica(logMessage, bulk: bulkMessage, debugging: debugging);
             }
         }
 

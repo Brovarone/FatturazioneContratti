@@ -231,7 +231,10 @@ namespace FatturazioneContratti.Forms
 
                     if (!checkOk)
                     {
-                        Log("Controllo flusso terminato con incongruenze. Interruzione generazione fatture.");
+                        // Interruzione: è un esito negativo, quindi va su UI e file
+                        // anche quando la modalità log è impostata solo su file.
+                        Log("Controllo flusso terminato con incongruenze. Interruzione generazione fatture.",
+                            AppConfig.LogTarget.Both);
                         return false;
                     }
                 }
@@ -275,9 +278,7 @@ namespace FatturazioneContratti.Forms
                     trans,
                     filtri,
                     loginId: AppConfig.LoginId,
-                    out string msg);
-
-                Log(msg);
+                    logMessage: Log);
 
                 if (ok) trans.Commit();
                 else trans.Rollback();
@@ -304,6 +305,9 @@ namespace FatturazioneContratti.Forms
             SetUiBusy(true);
             lnkApriLog.Visible = false;   // via il link della sessione precedente
             Log($"=== AVVIO: {nomeProcesso} ({DateTime.Now:dd/MM/yyyy HH:mm:ss}) ===");
+            // Nel file di sessione deve restare traccia del DB usato (produzione o test):
+            // l'etichetta lo mostra, ma il log no, e in lettura è la prima cosa che serve.
+            Log($"Database: {AppConfig.DatabaseInUse}{(AppConfig.IsTestDb ? " [TEST]" : "")} - Modalità log: {AppConfig.LogMode}");
 
             // Esegui il lavoro su background per non bloccare la UI
             System.Threading.Tasks.Task.Run(() =>
@@ -362,7 +366,7 @@ namespace FatturazioneContratti.Forms
 
         /// <summary>
         /// Scrive il log su UI / file / entrambi in base a <paramref name="destination"/>.
-        /// Sovraccarico compatibile con Action<string, AppConfig.LogTarget> se i servizi vengono aggiornati.
+        /// Sovraccarico compatibile con Action<string, AppConfig.LogTarget> usato dai servizi.
         /// </summary>
         public void Log(string message, AppConfig.LogTarget destination)
         {
@@ -410,16 +414,6 @@ namespace FatturazioneContratti.Forms
                 }
             }
         }
-
-        /// <summary>
-        /// Helper compatibile con Action<string> per forzare UI (utile quando passi il delegato ai servizi).
-        /// </summary>
-            public void LogToUi(string message) => Log(message, AppConfig.LogTarget.Ui);
-
-        /// <summary>
-        /// Helper compatibile con Action<string> per forzare file (utile quando passi il delegato ai servizi).
-        /// </summary>
-        public void LogToFile(string message) => Log(message, AppConfig.LogTarget.File);
 
         private void AggiornaStato(string status)
         {

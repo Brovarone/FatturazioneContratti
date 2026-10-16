@@ -1,9 +1,10 @@
+using FatturazioneContratti.Common;
 using System;
 using System.Text;
 
 namespace FatturazioneContratti.Orders
 {
-    public class FiltriOrdini
+    public class FiltriOrdini : ILogFiltri
     {
         public bool FiltroDateOrdini { get; set; }
         public DateTime FromOrdDate { get; set; }

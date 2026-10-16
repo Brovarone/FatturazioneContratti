@@ -36,7 +36,7 @@ namespace FatturazioneContratti.Orders
         {
             if (filtri.PercIstat == 0)
             {
-                logMessage?.Invoke("Elaborazione Interrotta: Percentuale Adeguamento ISTAT pari a Zero o non valida.", AppConfig.LogTarget.Ui);
+                LogDiagnostica.Errore(logMessage, "Elaborazione Interrotta: Percentuale Adeguamento ISTAT pari a Zero o non valida.");
                 return false;
             }
 
@@ -50,6 +50,10 @@ namespace FatturazioneContratti.Orders
 
             try
             {
+                // I filtri della run vengono registrati su UI/file: il log di sessione
+                // deve dire con quali parametri è partito l'adeguamento.
+                LogDiagnostica.LogFiltri(logMessage, filtri);
+
                 updateStatus?.Invoke("Estrazione ordini per adeguamento ISTAT");
 
                 // -------------------------------------------------------------------------
@@ -75,14 +79,14 @@ namespace FatturazioneContratti.Orders
 
                 if (allOrderIds.Count == 0)
                 {
-                    logMessage?.Invoke("Nessun ordine estratto con i filtri ISTAT specificati.", AppConfig.LogTarget.Ui);
+                    LogDiagnostica.Informativo(logMessage, "Nessun ordine estratto con i filtri ISTAT specificati.");
                     return true;
                 }
 
                 totOrdini = allOrderIds.Count;
                 string msgTot = $"Ordini Estratti per ISTAT: {totOrdini}";
                 Debug.WriteLine(msgTot);
-                logMessage?.Invoke(msgTot, AppConfig.LogTarget.Ui);
+                LogDiagnostica.Informativo(logMessage, msgTot);
                 updateStatus?.Invoke(msgTot);
 
                 var efAllordCliAttivita = new List<AllordCliAttivita>();
@@ -111,7 +115,9 @@ namespace FatturazioneContratti.Orders
                             _context,
                             blocId,
                             AppConfig.IsDebugging,
-                            msg => logMessage?.Invoke(msg, AppConfig.LogTarget.Ui));
+                            // Messaggi della scansione diagnostica: sono sempre segnalazioni
+                            // di errore/crash, quindi vanno su UI e file.
+                            msg => LogDiagnostica.Errore(logMessage, msg));
 
                         foreach (var o in allOrdersChunk)
                         {
@@ -336,7 +342,7 @@ namespace FatturazioneContratti.Orders
 
                 // Salvataggio Bulk transazionale
                 string msgValid = $"Ordini con righe Contratto valide per ISTAT: {totOrdiniOk}";
-                logMessage?.Invoke(msgValid, AppConfig.LogTarget.Ui);
+                LogDiagnostica.Informativo(logMessage, msgValid);
 
                 if (totOrdiniOk > 0)
                 {
@@ -346,16 +352,17 @@ namespace FatturazioneContratti.Orders
                     {
                         BulkPersistenceHelper.BulkExecuteList(_context, efAllordCliAttivita, "ALLOrdCliAttivita", BulkOperation.InsertOrUpdate, "righe attività", bulkMessage);
                         BulkPersistenceHelper.BulkExecuteList(_context, efAllordCliContratto, "ALLOrdCliContratto", BulkOperation.Update, "righe contratto", bulkMessage);
-                    }, logMessage, errori);
+                    }, logMessage);
 
                     if (esito)
                     {
                         string esitoMsg = $"Processati con successo: {totOrdiniOk} ordini per adeguamento ISTAT.";
                         bulkMessage.AppendLine(esitoMsg);
-                        logMessage?.Invoke(esitoMsg, AppConfig.LogTarget.Ui);
+                        LogDiagnostica.Informativo(logMessage, esitoMsg);
                     }
                     else
                     {
+                        // Rollback già riportato da BulkPersistenceHelper: qui solo l'esito.
                         return false;
                     }
                 }
@@ -363,10 +370,15 @@ namespace FatturazioneContratti.Orders
             catch (Exception ex)
             {
                 Debug.WriteLine(ex.Message);
-                errori.AppendLine($"[Procedura ISTAT] Messaggio: {ex.Message}");
-                errori.AppendLine($"[Procedura ISTAT] Stack: {ex.StackTrace}");
-                logMessage?.Invoke($"ERRORE ISTAT: {ex.Message}", AppConfig.LogTarget.Ui);
+                // Messaggio + UI/file, stack sul file (prima finiva solo su UI con ex.Message).
+                LogDiagnostica.Errore(logMessage, ex);
                 return false;
+            }
+            finally
+            {
+                // Errori e avvisi sempre, statistiche bulk e tracciato diagnostico
+                // secondo la regola di routing (vedi TODO §1b).
+                LogDiagnostica.Scarica(logMessage, errori, avvisi, bulkMessage, debugging);
             }
 
             return errori.Length == 0;

@@ -212,7 +212,8 @@ namespace FatturazioneContratti.Forms
             f.Periodi[5] = f.PeriodoSemestrali;
             f.Periodi[6] = f.PeriodoAnnuali;
 
-            f.CostruisciFiltriLog();
+            // Nota: la descrizione dei filtri per il log la costruisce il servizio
+            // (LogDiagnostica.LogFiltri) all'avvio dell'elaborazione.
             return f;
         }
     }

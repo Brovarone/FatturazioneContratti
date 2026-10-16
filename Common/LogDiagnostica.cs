@@ -18,18 +18,18 @@ namespace FatturazioneContratti.Common
     public static class LogDiagnostica
     {
         /// <summary>Messaggio informativo: segue la modalità scelta dall'utente in FSettings.</summary>
-        public static void Informativo(Action<string, AppConfig.LogTarget> log, string messaggio)
+        public static void Informativo(Action<string, AppConfig.LogTarget>? log, string messaggio)
             => log?.Invoke(messaggio, AppConfig.LogMode);
 
         /// <summary>Errore/anomalia: sempre su UI e file, qualunque sia LogMode.</summary>
-        public static void Errore(Action<string, AppConfig.LogTarget> log, string messaggio)
+        public static void Errore(Action<string, AppConfig.LogTarget>? log, string messaggio)
             => log?.Invoke(messaggio, AppConfig.LogTarget.Both);
 
         /// <summary>
         /// Eccezione: riga sintetica (messaggio) su UI+file, intero oggetto con stack trace
         /// sul file — così il log di sessione resta analizzabile senza sporcare la UI.
         /// </summary>
-        public static void Errore(Action<string, AppConfig.LogTarget> log, Exception ex)
+        public static void Errore(Action<string, AppConfig.LogTarget>? log, Exception? ex)
         {
             if (log == null || ex == null) return;
             log(ex.Message, AppConfig.LogTarget.Both);
@@ -37,14 +37,14 @@ namespace FatturazioneContratti.Common
         }
 
         /// <summary>Avviso operativo (es. "controllare canoni!"): trattato come errore, cioè visibile sempre.</summary>
-        public static void Avviso(Action<string, AppConfig.LogTarget> log, string messaggio)
+        public static void Avviso(Action<string, AppConfig.LogTarget>? log, string messaggio)
             => log?.Invoke(messaggio, AppConfig.LogTarget.Both);
 
         /// <summary>
         /// Emette i filtri della run (riga per riga, seguendo LogMode). Ricostruisce sempre
         /// il testo, così il servizio non dipende dalla chiamata fatta dal form.
         /// </summary>
-        public static void LogFiltri(Action<string, AppConfig.LogTarget> log, ILogFiltri filtri)
+        public static void LogFiltri(Action<string, AppConfig.LogTarget>? log, ILogFiltri? filtri)
         {
             if (log == null || filtri == null) return;
             filtri.CostruisciFiltriLog();
@@ -56,11 +56,11 @@ namespace FatturazioneContratti.Common
         /// Tutti i parametri sono opzionali e null-passabili; i blocchi vuoti vengono ignorati.
         /// </summary>
         public static void Scarica(
-            Action<string, AppConfig.LogTarget> log,
-            StringBuilder errori = null,
-            StringBuilder avvisi = null,
-            StringBuilder bulk = null,
-            StringBuilder debugging = null)
+            Action<string, AppConfig.LogTarget>? log,
+            StringBuilder? errori = null,
+            StringBuilder? avvisi = null,
+            StringBuilder? bulk = null,
+            StringBuilder? debugging = null)
         {
             if (log == null) return;
 
@@ -79,9 +79,9 @@ namespace FatturazioneContratti.Common
         }
 
         /// <summary>Emissione di un blocco di testo rispettando la regola UI-riga-per-riga.</summary>
-        private static void Emetti(Action<string, AppConfig.LogTarget> log, string testo, AppConfig.LogTarget target)
+        private static void Emetti(Action<string, AppConfig.LogTarget>? log, string testo, AppConfig.LogTarget target)
         {
-            if (string.IsNullOrEmpty(testo)) return;
+            if (log == null || string.IsNullOrEmpty(testo)) return;
 
             bool includeUi = target == AppConfig.LogTarget.Ui || target == AppConfig.LogTarget.Both;
             if (!includeUi)

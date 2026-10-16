@@ -38,6 +38,10 @@ namespace FatturazioneContratti.Orders
 
             try
             {
+                // I filtri della run vengono registrati su UI/file: il log di sessione
+                // deve dire con quali parametri è partita l'elaborazione.
+                LogDiagnostica.LogFiltri(logMessage, filtri);
+
                 updateStatus?.Invoke("Estrazione preliminare delle chiavi primarie...");
 
                 // -------------------------------------------------------------------------
@@ -60,14 +64,14 @@ namespace FatturazioneContratti.Orders
 
                 if (allOrderIds.Count == 0)
                 {
-                    logMessage?.Invoke("Nessun ordine estratto con i filtri specificati.", AppConfig.LogTarget.Ui);
+                    LogDiagnostica.Informativo(logMessage, "Nessun ordine estratto con i filtri specificati.");
                     return true;
                 }
 
                 int totOrdini = allOrderIds.Count;
                 string msgTot = $"Trovati {totOrdini} ordini da elaborare";
                 Debug.WriteLine(msgTot);
-                logMessage?.Invoke(msgTot, AppConfig.LogTarget.Ui);
+                LogDiagnostica.Informativo(logMessage, msgTot);
                 updateStatus?.Invoke(msgTot);
 
                 // Default vendite/IVA + prototipo riga: caricati una sola volta per elaborazione.
@@ -86,12 +90,14 @@ namespace FatturazioneContratti.Orders
                         updateStatus?.Invoke($"Elaborazione blocco {i / dimensioneBlocco + 1} (Ordini {i + 1} - {Math.Min(i + dimensioneBlocco, totOrdini)} di {totOrdini})...");
                         int[] blocId = allOrderIds.Skip(i).Take(blockSize).ToArray();
                         // Chiamo il loader che gestisce la query con gli id
-                        if (AppConfig.IsDebugging) logMessage?.Invoke("[DEBUG ATTIVO] Avvio forzato della scansione ordine per ordine...", AppConfig.LogTarget.Ui);
+                        if (AppConfig.IsDebugging) LogDiagnostica.Informativo(logMessage, "[DEBUG ATTIVO] Avvio forzato della scansione ordine per ordine...");
                         var allOrdersChunk = LoadOrdersChunkByOrIn(
                             _context,
                             blocId,
                             AppConfig.IsDebugging,
-                            msg => logMessage?.Invoke(msg, AppConfig.LogTarget.Ui)
+                            // Messaggi della scansione diagnostica: sono sempre segnalazioni
+                            // di errore/crash, quindi vanno su UI e file.
+                            msg => LogDiagnostica.Errore(logMessage, msg)
                         );
 
                         foreach (var o in allOrdersChunk)
@@ -114,8 +120,8 @@ namespace FatturazioneContratti.Orders
                 progress1?.Finish();
 
                 // Salvataggio Bulk
-                logMessage?.Invoke("Salvataggio su database ERP...", AppConfig.LogTarget.Ui);
-                EseguiSalvataggioTransazionale(
+                LogDiagnostica.Informativo(logMessage, "Salvataggio su database ERP...");
+                bool salvataggioOk = EseguiSalvataggioTransazionale(
                     stato.UpdateMaSaleOrd.Count,
                     stato.UpdateAllordCliContratto.Count,
                     stato.UpdateMaSaleOrd,
@@ -124,17 +130,29 @@ namespace FatturazioneContratti.Orders
                     stato.UpdateAllordCliAttivita,
                     stato.UpdateAllordCliContratto,
                     stato.BulkMessage,
-                    stato.Errori,
                     logMessage);
-                logMessage?.Invoke("[COMPLETATO] Elaborazione a blocchi di ID conclusa con successo.", AppConfig.LogTarget.Ui);
+
+                // Il rollback bulk è già riportato da BulkPersistenceHelper (UI + file):
+                // qui si segnala solo l'esito, senza raddoppiare i messaggi.
+                if (!salvataggioOk) return false;
+
+                // "COMPLETATO" solo se non ci sono errori di business: altrimenti il
+                // riassunto degli errori viene scaricato dal finally e l'esito sarà false.
+                if (stato.Errori.Length == 0)
+                    LogDiagnostica.Informativo(logMessage, "[COMPLETATO] Elaborazione a blocchi di ID conclusa con successo.");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine(ex.Message);
-                stato.Errori.AppendLine($"[Procedura] Messaggio: {ex.Message}");
-                stato.Errori.AppendLine($"[Procedura] Stack: {ex.StackTrace}");
-                logMessage?.Invoke($"ERRORE: {ex.Message}", AppConfig.LogTarget.Ui);
+                // Messaggio + UI/file, stack sul file: l'errore finisce anche negli
+                // accumulatori solo come riga sintetica (niente stack nel ListBox).
+                LogDiagnostica.Errore(logMessage, ex);
                 return false;
+            }
+            finally
+            {
+                // Scarico degli accumulatori su ogni uscita (questo era il motivo per cui
+                // il log scriveva "COMPLETATO CON ERRORI" senza mai dire il perché).
+                LogDiagnostica.Scarica(logMessage, stato.Errori, stato.Avvisi, stato.BulkMessage, stato.Debugging);
             }
 
             return stato.Errori.Length == 0;
@@ -907,7 +925,11 @@ namespace FatturazioneContratti.Orders
 
         #region Bulk Execution
 
-        private void EseguiSalvataggioTransazionale(
+        /// <summary>
+        /// Salva in transazione i cambiamenti accumulati. Ritorna false se la bulk ha
+        /// fallito (il dettaglio dell'errore è già gestito da BulkPersistenceHelper).
+        /// </summary>
+        private bool EseguiSalvataggioTransazionale(
             int totNuove,
             int totAggiornate,
             List<MaSaleOrd> ordini,
@@ -917,10 +939,9 @@ namespace FatturazioneContratti.Orders
             List<AllordCliAttivita> attivita,
             List<AllordCliContratto> contratti,
             StringBuilder bulkMessage,
-            StringBuilder errori,
-            Action<string, AppConfig.LogTarget> logMessage)
+            Action<string, AppConfig.LogTarget>? logMessage)
         {
-            if (totNuove == 0 && totAggiornate == 0) return;
+            if (totNuove == 0 && totAggiornate == 0) return true;
 
             bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_context, () =>
             {
@@ -930,14 +951,16 @@ namespace FatturazioneContratti.Orders
                 BulkPersistenceHelper.BulkExecuteList(_context, accessorie, "AllordCliAcc", BulkOperation.Update, "dati accessori ordini", bulkMessage);
                 BulkPersistenceHelper.BulkExecuteList(_context, attivita, "AllordCliAttivita", BulkOperation.Update, "righe attività", bulkMessage);
                 BulkPersistenceHelper.BulkExecuteList(_context, contratti, "AllordCliContratto", BulkOperation.Update, "righe contratto", bulkMessage);
-            }, logMessage, errori);
+            }, logMessage);
 
             if (esito)
             {
                 string riassunto = $"[RIASSUNTO] Ordini con Righe: {totNuove} | Ordini con Adeguamenti: {totAggiornate}";
                 bulkMessage.AppendLine(riassunto);
-                logMessage?.Invoke(riassunto, AppConfig.LogTarget.Ui);
+                LogDiagnostica.Informativo(logMessage, riassunto);
             }
+
+            return esito;
         }
 
         #endregion

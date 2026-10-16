@@ -29,9 +29,11 @@ non committate). Le voci eseguite sono spuntate `[x]` e riportate in §5.*
 
 **Decisioni residue** (UI / file / entrambi):
 
-- [ ] Target servizi: passare `Both` (o `LogMode`) nelle `Invoke` dei servizi, oppure
-  promuovere `Ui`→`Both` in `FLogin.Log` quando `LogMode` è `File`/`Both`?
-- [ ] Scaricare `debugging`/`avvisi` su file a fine workflow (vedi punto 19)?
+- [x] Target servizi: **risolto in §1b** — errori/anomalie → `Both`, informativi →
+      `LogMode`, `debugging` → `File` se `IsDebugging`, routing centralizzato in
+      `Common/LogDiagnostica.cs`.
+- [x] Scaricare `debugging`/`avvisi` su file a fine workflow: **risolto in §1b** —
+      `LogDiagnostica.Scarica(...)` chiamata in `finally` a fine workflow.
 - [x] Formato/rotazione: file per sessione (`FatturazioneContratti_yyyyMMdd_HHmmss.log`)
   creato in `FLogin_Load` (anche vuoto) + `LastLogPath` salvato — `Forms/FLogin.cs:102-124`.
 - [x] LinkLabel "Apri file di log": apre file → fallback Notepad → fallback cartella;
@@ -39,6 +41,82 @@ non committate). Le voci eseguite sono spuntate `[x]` e riportate in §5.*
 
 Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diagnostico
 ([ESCLUSA] varie, dettaglio righe, messaggi storici tipo "  - Cessato").
+
+---
+
+## 1b. PIANO ADEGUAMENTO LOG (16/10/2026) — promemoria step
+
+**Decisioni prese (16/10/2026)**:
+- **Routing**: errori/anomalie/rollback → `LogTarget.Both`; informativi (filtri,
+  conteggi, riepiloghi, statistiche bulk) → `AppConfig.LogMode`; `debugging` (tracciato
+  lungo) → `LogTarget.File` **solo se** `AppConfig.IsDebugging`.
+- Blocchi multi-riga: **riga per riga** quando il target include la UI (senza il
+  `lstStato.Items.Add` con `\n` diventa illeggibile), altrimenti un solo `Invoke`.
+- Filtri nel workflow consuntivo: loggati **due volte** (uno per servizio) — ogni step
+  resta autodescrittivo.
+- `progress2` in `ControllaFlussoIntegra`/`GeneraFattureConsuntivo`: **non rimossa**,
+  va **abilitata con la logica a blocchi da 100 record** (progress1 = blocchi,
+  progress2 = record nel blocco, come `OrderGenerationService`).
+
+**Step — TUTTI ESEGUITI il 16/10/2026** (build: 0 errori, warning invariati ~1816):
+
+- [x] **A. `ConsuntivoService.ControllaFlussoIntegra`**
+  - [x] log filtri all'avvio (`LogDiagnostica.LogFiltri` → LogMode, riga per riga)
+  - [x] contatore `associati` + esito finale **sempre** emesso:
+        `Controllo flusso completato: N interventi, M associati, K anomalie`
+  - [x] blocco anomalie: riepilogo in **una riga → solo UI**; dettaglio completo → `File`
+        una volta sola. *Nota*: con `Both` la testa finiva due volte nel file, quindi la
+        riga di testa va su UI e il file riceve il blocco completo subito dopo (entrambi
+        hanno comunque tutto).
+  - [x] voci anomalie arricchite via `DescriviIntervento(i, nrOrdine)` →
+        `Contratto X - ordine Y - evento Z - filiale F - allarme gg/mm/aaaa`
+  - [x] `catch`: `LogDiagnostica.Errore(log, ex)` → messaggio `Both` + stack `File`
+  - [x] `progress2` **abilitata** con blocchi da 100 (`DimensioneBlocco`):
+        progress1 = blocchi, progress2 = record del blocco; via `errori` morto e via
+        `Debug.WriteLine` nel loop; `TBModifiedID = _loginId`
+- [x] **B. `ConsuntivoService.GeneraFattureConsuntivo`**
+  - [x] log filtri all'avvio → LogMode
+  - [x] contatore `MA_IdNumbers` mancante → `Both`; eccezione → `Errore(log, ex)`;
+        successo → `Fatture generate con successo: N testate, M righe` (LogMode)
+  - [x] `finally` → `Scarica(bulk: bulkMessage, debugging: debugging)`
+  - [x] `progress2` con blocchi da 100 + `Finish()` finale (mancava del tutto)
+  - [x] via `using static ...DbLoggerCategory`; via `errori` (non serviva più)
+- [x] **C. `OrderGenerationService.cs` + `.Istat.cs`**
+  - [x] log filtri all'avvio di entrambi → LogMode
+  - [x] informativi `Ui` → LogMode; errori/crash → `Both` (wrapper scansione diagnostica
+        `LoadOrdersChunkByOrIn`, percentuale ISTAT = 0, catch)
+  - [x] `finally` → `Scarica(errori, avvisi, bulkMessage, debugging)`: **`stato.Errori`
+        finalmente compariva nell'esito ma non veniva mai stampato** ("COMPLETATO CON
+        ERRORI" senza motivo)
+  - [x] `EseguiSalvataggioTransazionale` ora **ritorna `bool`**: prima un rollback bulk
+        veniva segnalato solo per caso (passava tramite `errori`), ora è esplicito e
+        `[COMPLETATO]` viene stampato solo se `Errori` è vuoto
+- [x] **D. `Common/BulkPersistenceHelper.cs` + nuovo `Common/LogDiagnostica.cs`**
+  - [x] rollback → `LogDiagnostica.Errore(log, ex)` + riga rollback → `Both` (stack a file)
+  - [x] **parametro `logBuilder` rimosso** da `ExecuteInBulkTransaction`: l'errore bulk
+        non viene più duplicato (lo riporta il helper, il caller scarica solo gli errori
+        di business) — aggiornati i 3 call site
+  - [x] `Common/LogDiagnostica.cs`: `Informativo` / `Errore(string|Exception)` / `Avviso`
+        / `LogFiltri` / `Scarica` + `Common/ILogFiltri.cs` implemented da i 3 DTO filtri
+- [x] **E. `FattureDaOrdiniService` + `FLogin`**
+  - [x] `out resultMessage` **rimosso**: il servizio logga da solo (filtri → LogMode,
+        esito `Adeguate N righe` → LogMode, eccezione → `Both` + stack a file); `FLogin`
+        passa solo `logMessage: Log`
+  - [x] `FLogin` interruzione controllo → `Log(..., Both)` (con `LogMode = File` prima
+        spariva dalla UI)
+  - [x] **riga nuova** in `EseguiOperazione`: `Database: X [TEST] - Modalità log: Y`
+        (nel file di sessione non compariva mai quale DB si stava usando)
+- [x] **F. Pulizie**
+  - [x] via `LogToUi`/`LogToFile` (mai usati — convenzione #12)
+  - [x] via `CostruisciFiltriLog()` nei due form (a carico dei servizi ora)
+  - [x] refuso "Entambi": **era già corretto** in `FSettings.cs:44` (nota §1 superata)
+  - [x] `FiltriOrdini` / `FiltriOrdiniConsuntivo` / `FiltriAllineamentoFatture`
+        implementano `ILogFiltri` (il terzo non aveva nessuna chiamata a `CostruisciFiltriLog`)
+- [ ] **G. Verifica manuale (DA FARE)**: 4 workflow su DB test con LogMode = Ui / File /
+      Entrambi → il file deve contenere filtri + conteggi + dettaglio anomalie + stack,
+      la UI deve restare leggibile; `IsDebugging = true` per il tracciato `debugging`;
+      controllare le barre progress a blocchi da 100 (consuntivo, che prima non aveva
+      barra secondaria né `Finish`).
 
 ---
 
@@ -52,12 +130,10 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
   Sospensione + Annullamento/Istat? Se sì è un bug (viene ignorata).
 - Fix probabile: `if/else if` espliciti invece di `continue`.
 
-### Punto 19 — log diagnostici mai emessi
-- `debugging` e `avvisi` (StringBuilder) popolati in tutti i workflow e mai
-  scaricati su log/UI. Esempi di messaggi persi:
-  - `OrderGenerationService.cs`: "data prossima fatturazione antecedente...", tutte le `[ESCLUSA]`
-  - `OrderGenerationService.Istat.cs`: "riga di adeguamento Istat già presente per l'anno...", "scadenza fissa. Controllare canoni!"
-- Da concordare con le decisioni del punto 1 (questa sessione).
+### Punto 19 — log diagnostici mai emessi ✅ RISOLTO (16/10/2026, vedi §1b)
+- `debugging`, `avvisi`, `bulkMessage`, `errori` ora vengono scaricati a fine workflow
+  da `LogDiagnostica.Scarica` (chiamato nei `finally` di `GeneraRigheOrdine`,
+  `AdeguaIstatOrdine`, `GeneraFattureConsuntivo`).
 
 ---
 
@@ -124,6 +200,17 @@ Nessun test automatico. Da provare via UI con DB di test:
 4. **Allineamento Fatture** — ATTENZIONE: non più "non toccato": `FattureDaOrdiniService`
    ora prende `FiltriAllineamentoFatture` + nuova dialog `FAskFiltriAllineamentoFatture`
    (modifiche non committate) → da riverificare via UI come gli altri.
+5. **Log (§1b, 16/10/2026)** — per ogni workflow verificare su DB test:
+   - con `LogMode = Entrambi`: il file contiene i **filtri della run**, i conteggi,
+     il dettaglio anomalie (una sola volta) e gli errori con stack;
+   - con `LogMode = File`: la UI resta leggibile ma gli **errori** (anomalie controllo,
+     rollback bulk, eccezioni) compaiono **comunque** sulla UI;
+   - con `LogMode = UI`: i messaggi informativi non finiscono a file, ma errori e
+     dettaglio anomalie sì;
+   - `IsDebugging = true`: a fine workflow nel file compare il tracciato `debugging`
+     (una riga per ordine/attività);
+   - barre di avanzamento del **consuntivo**: progress1 = blocchi da 100,
+     progress2 = record del blocco, chiusura `Finish` a fine passo.
 
 ---
 
@@ -165,4 +252,21 @@ Nessun test automatico. Da provare via UI con DB di test:
 > (commit su `master` + branch `feature/refactor-genera-righe-ordine`) — resta la verifica
 > manuale §4.
 
-Build: 0 errori (warning ~1820, per lo più attesi sui model generati).
+---
+
+## 6. Adeguamento LOG — 16/10/2026 (dettaglio modifiche)
+
+| # | Modifica | File |
+|---|----------|------|
+| L3 | **`Common/LogDiagnostica.cs` (nuovo)**: `Informativo` (→ `LogMode`), `Errore(string)` (→ `Both`), `Errore(Exception)` (messaggio → `Both`, stack → `File`), `Avviso` (→ `Both`), `LogFiltri` (filtri → `LogMode`, riga per riga), `Scarica(errori, avvisi, bulk, debugging)`; blocchi multi-riga emessi **riga per riga** quando il target include la UI | `Common/LogDiagnostica.cs` |
+| L4 | **`Common/ILogFiltri.cs` (nuovo)**: contratto `LogFiltri`/`CostruisciFiltriLog` implementato dai 3 DTO | `Common/ILogFiltri.cs`, `Orders/FiltriOrdini.cs`, `Invoicing/FiltriOrdiniConsuntivo.cs`, `Invoicing/FiltriAllineamentoFatture.cs` |
+| L5 | Rollback bulk → `Errore(log, ex)` + riga rollback `Both`; rimosso il parametro `logBuilder` (l'errore non viene più duplicato negli accumulatori del caller) | `Common/BulkPersistenceHelper.cs` + 3 call site |
+| L6 | `ControllaFlussoIntegra`: filtri in log, contatore `associati`, esito sempre emesso, anomalia con **riga contatori su UI + dettaglio su file una volta sola**, voci anomalia con evento/filiale/data, `catch` con stack, `progress2` a blocchi da 100, via `errori` morto e `Debug.WriteLine`, `TBModifiedID = _loginId` | `Invoicing/ConsuntivoService.cs` |
+| L7 | `GeneraFattureConsuntivo`: filtri in log, `MA_IdNumbers` mancante → `Both`, successo con testate **e righe**, `catch` con stack, `finally` che scarica `bulkMessage`/`debugging`, `progress2` a blocchi da 100 + `Finish` (mancava), via `errori` e `using` inutile | `Invoicing/ConsuntivoService.cs` |
+| L8 | `GeneraRigheOrdine`/`AdeguaIstatOrdine`: filtri in log, informativi `Ui`→`LogMode`, errori `Ui`→`Both`, `finally` con `Scarica` (finalmente `stato.Errori` viene stampato), `EseguiSalvataggioTransazionale` **ritorna `bool`**, `[COMPLETATO]` solo senza errori | `Orders/OrderGenerationService.cs`, `Orders/OrderGenerationService.Istat.cs` |
+| L9 | Allineamento: rimosso `out resultMessage` → il servizio logga filtri, esito e eccezione (con stack); `FLogin` passa `logMessage: Log`. Interruzione controllo → `Both`; nuova riga `Database: X [TEST] - Modalità log: Y` in apertura | `Invoicing/FattureDaOrdiniService.cs`, `Forms/FLogin.cs` |
+| L10 | Pulizie: via `LogToUi`/`LogToFile`, via `CostruisciFiltriLog()` nei form (a carico dei servizi) | `Forms/FLogin.cs`, `Forms/FAskFiltriOrdini.cs`, `Forms/FAskFiltriOrdiniConsuntivo.cs` |
+
+Modifiche non committate. Refuso "Entambi" in `FSettings`: **già corretto** in origine.
+
+Build: **0 errori** (warning ~1816, invariati rispetto a prima della sessione di log).

@@ -21,11 +21,16 @@ namespace FatturazioneContratti.Common
 
     public static class BulkPersistenceHelper
     {
+        /// <summary>
+        /// Esegue le azioni bulk in una transazione condivisa con rollback automatico.
+        /// In caso di errore il reporting è affidato a <see cref="LogDiagnostica"/>:
+        /// messaggio + rollback su UI e file, stack trace sul file. L'errore NON viene
+        /// duplicato negli accumulatori del chiamante, che scarica solo gli errori di business.
+        /// </summary>
         public static bool ExecuteInBulkTransaction(
             DbContext context,
             Action executeActions,
-            Action<string, AppConfig.LogTarget> logMessage = null,
-            StringBuilder logBuilder = null)
+            Action<string, AppConfig.LogTarget>? logMessage = null)
         {
             using var bulkTrans = context.Database.BeginTransaction();
             bool traceOnExecuted = false;
@@ -44,9 +49,8 @@ namespace FatturazioneContratti.Common
             {
                 try { bulkTrans.Rollback(); } catch (Exception rbEx) { Debug.WriteLine($"[Rollback Fallito]: {rbEx.Message}"); }
 
-                logBuilder?.AppendLine($"[Bulk Transaction Error]: {ex.Message}");
-                logBuilder?.AppendLine(ex.StackTrace);  
-                logMessage?.Invoke($"Rollback eseguito a causa di un errore: {ex.Message}", AppConfig.LogTarget.Ui);
+                LogDiagnostica.Errore(logMessage, ex);
+                LogDiagnostica.Errore(logMessage, $"Rollback eseguito a causa di un errore: {ex.Message}");
                 return false;
             }
             finally

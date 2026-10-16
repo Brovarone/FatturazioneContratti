@@ -2,20 +2,27 @@ using System;
 using System.Data;
 using System.Text;
 using FatturazioneContratti.Common;
+using FatturazioneContratti.Config;
 using Microsoft.Data.SqlClient;
 
 namespace FatturazioneContratti.Invoicing
 {
     public static class FattureDaOrdiniService
     {
+        /// <summary>
+        /// Allinea date/nr canoni delle righe fattura da quelle della riga ordine.
+        /// Il messaggio di esito viene loggato qui dentro (filtri ed esito come informativo,
+        /// eccezione con stack come errore): il caller passa solo il delegato.
+        /// </summary>
         public static bool AdeguaFattureDaOrdini(
             SqlConnection connection,
             SqlTransaction transaction,
             FiltriAllineamentoFatture filtri,
             int loginId,
-            out string resultMessage)
+            Action<string, AppConfig.LogTarget>? logMessage = null)
         {
-            resultMessage = string.Empty;
+            // I filtri della run vengono registrati su UI/file come negli altri workflow.
+            LogDiagnostica.LogFiltri(logMessage, filtri);
 
             // Timestamp unico dell'operazione (convenzione degli altri workflow):
             // tutte le righe aggiornate portano lo stesso valore.
@@ -54,14 +61,15 @@ namespace FatturazioneContratti.Invoicing
                 cmd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
 
                 int irows = cmd.ExecuteNonQuery();
-                resultMessage = irows <= 0
+                LogDiagnostica.Informativo(logMessage, irows <= 0
                     ? "Nessun documento di vendita da aggiornare"
-                    : $"Adeguate {irows} righe.";
+                    : $"Adeguate {irows} righe.");
                 return true;
             }
             catch (Exception ex)
             {
-                resultMessage = $"Errore nell'adeguamento fatture: {ex.Message}";
+                // Errore: messaggio su UI e file, stack sul file.
+                LogDiagnostica.Errore(logMessage, ex);
                 return false;
             }
         }

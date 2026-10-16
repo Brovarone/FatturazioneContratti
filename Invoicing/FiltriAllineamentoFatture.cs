@@ -1,9 +1,10 @@
+using FatturazioneContratti.Common;
 using System;
 using System.Text;
 
 namespace FatturazioneContratti.Invoicing
 {
-    public class FiltriAllineamentoFatture
+    public class FiltriAllineamentoFatture : ILogFiltri
     {
         public DateTime DataFattDa { get; set; } = new DateTime(DateTime.Today.Year, 1, 1);
         public DateTime DataFattA { get; set; } = new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.DaysInMonth(DateTime.Today.Year, DateTime.Today.Month));
