@@ -1,7 +1,7 @@
 using EFCore.BulkExtensions;
 using EFMago.Models;
 using FatturazioneContratti.Common;
-using FatturazioneContratti.Config;
+using FatturazioneContratti.Data;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Data.Common;
@@ -29,7 +29,7 @@ namespace FatturazioneContratti.Orders
         {
             FiltriOrdini filtri = options.Filtri;
             int dimensioneBlocco = options.DimensioneBlocco;
-            Action<string, AppConfig.LogTarget> logMessage = options.LogMessage;
+            Action<string, LogTarget> logMessage = options.LogMessage;
             Action<string> updateStatus = options.UpdateStatus;
             ProgressCallbacks? progress1 = options.ProgressBlocchi;
             ProgressCallbacks? progress2 = options.ProgressOrdini;
@@ -90,11 +90,11 @@ namespace FatturazioneContratti.Orders
                         updateStatus?.Invoke($"Elaborazione blocco {i / dimensioneBlocco + 1} (Ordini {i + 1} - {Math.Min(i + dimensioneBlocco, totOrdini)} di {totOrdini})...");
                         int[] blocId = allOrderIds.Skip(i).Take(blockSize).ToArray();
                         // Chiamo il loader che gestisce la query con gli id
-                        if (AppConfig.IsDebugging) LogDiagnostica.Informativo(logMessage, "[DEBUG ATTIVO] Avvio forzato della scansione ordine per ordine...");
+                        if (SqlTools.Options.IsDebugging) LogDiagnostica.Informativo(logMessage, "[DEBUG ATTIVO] Avvio forzato della scansione ordine per ordine...");
                         var allOrdersChunk = LoadOrdersChunkByOrIn(
                             _context,
                             blocId,
-                            AppConfig.IsDebugging,
+                            SqlTools.Options.IsDebugging,
                             // Messaggi della scansione diagnostica: sono sempre segnalazioni
                             // di errore/crash, quindi vanno su UI e file.
                             msg => LogDiagnostica.Errore(logMessage, msg)
@@ -939,7 +939,7 @@ namespace FatturazioneContratti.Orders
             List<AllordCliAttivita> attivita,
             List<AllordCliContratto> contratti,
             StringBuilder bulkMessage,
-            Action<string, AppConfig.LogTarget>? logMessage)
+            Action<string, LogTarget>? logMessage)
         {
             if (totNuove == 0 && totAggiornate == 0) return true;
 

@@ -31,8 +31,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Folder Include="Data\Configurations\" />
-    <Folder Include="Data\Models\" />
+    <!-- Libreria di dominio condivisa (Data/Common/Orders/Invoicing).
+         src\** è escluso dai glob: altrimenti i file della libreria verrebbero
+         compilati anche in questo progetto (doppia build + types ambigui). -->
+    <Compile Remove="src\**" />
+    <ProjectReference Include="src\EFMago\EFMago.csproj" />
   </ItemGroup>
 
   <ItemGroup>

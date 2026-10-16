@@ -1,5 +1,6 @@
 ﻿using FatturazioneContratti.Invoicing;
 using FatturazioneContratti.Orders;
+using FatturazioneContratti.Common;
 using FatturazioneContratti.Config;
 using FatturazioneContratti.Data;
 using System;
@@ -234,7 +235,7 @@ namespace FatturazioneContratti.Forms
                         // Interruzione: è un esito negativo, quindi va su UI e file
                         // anche quando la modalità log è impostata solo su file.
                         Log("Controllo flusso terminato con incongruenze. Interruzione generazione fatture.",
-                            AppConfig.LogTarget.Both);
+                            LogTarget.Both);
                         return false;
                     }
                 }
@@ -366,23 +367,23 @@ namespace FatturazioneContratti.Forms
 
         /// <summary>
         /// Scrive il log su UI / file / entrambi in base a <paramref name="destination"/>.
-        /// Sovraccarico compatibile con Action<string, AppConfig.LogTarget> usato dai servizi.
+        /// Sovraccarico compatibile con Action<string, LogTarget> usato dai servizi.
         /// </summary>
-        public void Log(string message, AppConfig.LogTarget destination)
+        public void Log(string message, LogTarget destination)
         {
             if (string.IsNullOrWhiteSpace(message)) return;
 
             string timed = $"[{DateTime.Now:HH:mm:ss}] {message}";
 
             // Se serve scrivere su UI ma siamo in thread non-UI => marshaling
-            if ((destination == AppConfig.LogTarget.Ui || destination == AppConfig.LogTarget.Both) && InvokeRequired)
+            if ((destination == LogTarget.Ui || destination == LogTarget.Both) && InvokeRequired)
             {
                 BeginInvoke(new Action(() => Log(message, destination)));
                 return;
             }
 
             // Scrive su UI
-            if (destination == AppConfig.LogTarget.Ui || destination == AppConfig.LogTarget.Both)
+            if (destination == LogTarget.Ui || destination == LogTarget.Both)
             {
                 try
                 {
@@ -396,7 +397,7 @@ namespace FatturazioneContratti.Forms
             }
 
             // Scrive su file (se impostato)
-            if (destination == AppConfig.LogTarget.File || destination == AppConfig.LogTarget.Both)
+            if (destination == LogTarget.File || destination == LogTarget.Both)
             {
                 try
                 {

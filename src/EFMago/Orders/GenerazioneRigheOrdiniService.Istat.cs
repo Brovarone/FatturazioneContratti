@@ -6,7 +6,7 @@ using System.Text;
 using EFCore.BulkExtensions;
 using EFMago.Models;
 using FatturazioneContratti.Common;
-using FatturazioneContratti.Config;
+using FatturazioneContratti.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace FatturazioneContratti.Orders
@@ -29,7 +29,7 @@ namespace FatturazioneContratti.Orders
         public bool AdeguaIstatOrdine(
             FiltriOrdini filtri,
             int dimensioneBlocco = 100,
-            Action<string, AppConfig.LogTarget> logMessage = null,
+            Action<string, LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
             ProgressCallbacks? progress2 = null)
@@ -114,7 +114,7 @@ namespace FatturazioneContratti.Orders
                         var allOrdersChunk = LoadOrdersChunkByOrIn(
                             _context,
                             blocId,
-                            AppConfig.IsDebugging,
+                            SqlTools.Options.IsDebugging,
                             // Messaggi della scansione diagnostica: sono sempre segnalazioni
                             // di errore/crash, quindi vanno su UI e file.
                             msg => LogDiagnostica.Errore(logMessage, msg));

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.IO;
 using System.Text.Json;
+using FatturazioneContratti.Common;
+using FatturazioneContratti.Data;
 
 namespace FatturazioneContratti.Config
 {
@@ -31,12 +33,8 @@ namespace FatturazioneContratti.Config
         /// <summary>Ultimo errore di lettura della configurazione (null se l'ultimo Load è andato a buon fine).</summary>
         public static string? LastLoadError { get; private set; }
         
-        public enum LogTarget
-        {
-            Ui = 0,
-            File = 1,
-            Both = 2
-        }
+        // Enum LogTarget spostato nella libreria EFMago (FatturazioneContratti.Common.LogTarget)
+        // durante l'estrazione: Config resta solo nel progetto WinForms.
         public static LogTarget LogMode { get; set; } = LogTarget.Both;
 
         // Proprietà dinamica che restituisce il DB corretto in base ai radio/check
@@ -110,6 +108,10 @@ namespace FatturazioneContratti.Config
                 LastLoadError = $"Impossibile leggere il file di configurazione '{FilePath}': {ex.Message}";
                 System.Diagnostics.Debug.WriteLine($"[AppConfig.Load] {LastLoadError}");
             }
+
+            // Alimenta sempre la libreria EFMago (anche a default o dopo un Load fallito):
+            // il provider rilegge le proprietà statiche a ogni uso.
+            SyncToLibrary();
         }
 
         // METODO SAVE
@@ -148,6 +150,28 @@ namespace FatturazioneContratti.Config
                 // Log o gestione errore scrittura
                 System.Diagnostics.Debug.WriteLine($"Errore Save {configNameFile}: {ex.Message}");
             }
+
+            SyncToLibrary();
+        }
+
+        /// <summary>
+        /// Registra sulla libreria EFMago (SqlTools) la fabbrica delle opzioni: i valori sono
+        /// riletti a ogni accesso, così le modifiche fatte in runtime (es. cambio DB test in
+        /// FSettings prima del Save, Test Connessione) si riflettono senza nuove chiamate.
+        /// Chiamato da Load() e Save(); il sito farà altrettanto con il suo appsettings.
+        /// </summary>
+        private static void SyncToLibrary()
+        {
+            SqlTools.Configure(() => new EfmagoOptions
+            {
+                SqlServer = SqlServer,
+                UserId = UserId,
+                Password = Password,
+                DatabaseInUse = DatabaseInUse,
+                IsDebugging = IsDebugging,
+                LoginId = LoginId,
+                LogMode = LogMode
+            });
         }
 
         // DTO privato: esiste solo qui dentro per far felice JsonSerializer, nessuno fuori lo vede

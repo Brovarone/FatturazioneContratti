@@ -2,7 +2,6 @@ using System;
 using System.Data;
 using System.Text;
 using FatturazioneContratti.Common;
-using FatturazioneContratti.Config;
 using Microsoft.Data.SqlClient;
 
 namespace FatturazioneContratti.Invoicing
@@ -19,7 +18,7 @@ namespace FatturazioneContratti.Invoicing
             SqlTransaction transaction,
             FiltriAllineamentoFatture filtri,
             int loginId,
-            Action<string, AppConfig.LogTarget>? logMessage = null)
+            Action<string, LogTarget>? logMessage = null)
         {
             // I filtri della run vengono registrati su UI/file come negli altri workflow.
             LogDiagnostica.LogFiltri(logMessage, filtri);

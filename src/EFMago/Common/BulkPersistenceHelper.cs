@@ -1,5 +1,4 @@
 ﻿using EFCore.BulkExtensions;
-using FatturazioneContratti.Config;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using System;
@@ -30,7 +29,7 @@ namespace FatturazioneContratti.Common
         public static bool ExecuteInBulkTransaction(
             DbContext context,
             Action executeActions,
-            Action<string, AppConfig.LogTarget>? logMessage = null)
+            Action<string, LogTarget>? logMessage = null)
         {
             using var bulkTrans = context.Database.BeginTransaction();
             bool traceOnExecuted = false;

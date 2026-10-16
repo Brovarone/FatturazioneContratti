@@ -1,7 +1,6 @@
 using EFCore.BulkExtensions;
 using EFMago.Models;
 using FatturazioneContratti.Common;
-using FatturazioneContratti.Config;
 using FatturazioneContratti.Orders;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -121,7 +120,7 @@ namespace FatturazioneContratti.Invoicing
 
         public bool ControllaFlussoIntegra(
             FiltriOrdiniConsuntivo filtri,
-            Action<string, AppConfig.LogTarget> logMessage = null,
+            Action<string, LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
             ProgressCallbacks? progress2 = null)
@@ -335,9 +334,9 @@ namespace FatturazioneContratti.Invoicing
                     // UI: una riga sola con i contatori (il dettaglio resterebbe illeggibile
                     // nel ListBox). Va SOLO su UI: il file riceve il dettaglio completo
                     // subito dopo, e con "Both" la testa finirebbe due volte nel log.
-                    logMessage?.Invoke($"Riscontrate anomalie o incongruenze nel controllo flusso. {riepilogo}", AppConfig.LogTarget.Ui);
+                    logMessage?.Invoke($"Riscontrate anomalie o incongruenze nel controllo flusso. {riepilogo}", LogTarget.Ui);
                     // File: dettaglio completo (sezioni + riepilogo), scritto UNA volta sola
-                    logMessage?.Invoke(dettaglio.ToString(), AppConfig.LogTarget.File);
+                    logMessage?.Invoke(dettaglio.ToString(), LogTarget.File);
                     return false;
                 }
 
@@ -367,7 +366,7 @@ namespace FatturazioneContratti.Invoicing
         #region Genera Fatture Consuntivo
         public bool GeneraFattureConsuntivo(
             FiltriOrdiniConsuntivo filtri,
-            Action<string, AppConfig.LogTarget> logMessage = null,
+            Action<string, LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
             ProgressCallbacks? progress2 = null)

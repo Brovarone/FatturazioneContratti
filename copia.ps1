@@ -1,5 +1,5 @@
 $src = "D:\Progetti\ALLMigrazione"
-$dst = "D:\Progetti\FatturazioneContratti\Data"
+$dst = "D:\Progetti\FatturazioneContratti\src\EFMago\Data"
 
 Copy-Item "$src\EFMago\Models\Context\FattureContext.cs" "$dst\FattureContext.cs"
 

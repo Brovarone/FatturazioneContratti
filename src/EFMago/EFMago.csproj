@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Libreria di dominio/data-layer condivisa tra il WinForms (FatturazioneContratti)
+         e il futuro sito Blazor. Nessuna dipendenza da WinForms: la configurazione
+         arriva tramite EfmagoOptions (vedi SqlTools.Configure), non da AppConfig. -->
+    <RootNamespace>FatturazioneContratti</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EFCore.BulkExtensions" Version="8.1.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.31" />
+  </ItemGroup>
+
+</Project>

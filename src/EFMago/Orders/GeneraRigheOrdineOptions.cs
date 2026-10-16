@@ -1,4 +1,4 @@
-using FatturazioneContratti.Config;
+using FatturazioneContratti.Common;
 using System;
 
 namespace FatturazioneContratti.Orders
@@ -11,7 +11,7 @@ namespace FatturazioneContratti.Orders
     public sealed record GeneraRigheOrdineOptions(
         FiltriOrdini Filtri,
         int DimensioneBlocco = 100,
-        Action<string, AppConfig.LogTarget>? LogMessage = null,
+        Action<string, LogTarget>? LogMessage = null,
         Action<string>? UpdateStatus = null,
         ProgressCallbacks? ProgressBlocchi = null,
         ProgressCallbacks? ProgressOrdini = null);

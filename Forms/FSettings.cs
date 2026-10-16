@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows.Forms;
+using FatturazioneContratti.Common;
 using FatturazioneContratti.Config;
 using FatturazioneContratti.Data;
 
@@ -45,8 +46,8 @@ namespace FatturazioneContratti.Forms
 
             cboLogMode.SelectedIndex = AppConfig.LogMode switch
             {
-                AppConfig.LogTarget.Ui => 0,
-                AppConfig.LogTarget.File => 1,
+                LogTarget.Ui => 0,
+                LogTarget.File => 1,
                 _ => 2
             };
         }
@@ -125,9 +126,9 @@ namespace FatturazioneContratti.Forms
 
             AppConfig.LogMode = cboLogMode.SelectedIndex switch
             {
-                0 => AppConfig.LogTarget.Ui,
-                1 => AppConfig.LogTarget.File,
-                _ => AppConfig.LogTarget.Both
+                0 => LogTarget.Ui,
+                1 => LogTarget.File,
+                _ => LogTarget.Both
             };
 
             AppConfig.Save();
