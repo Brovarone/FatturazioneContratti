@@ -270,3 +270,34 @@ Nessun test automatico. Da provare via UI con DB di test:
 Modifiche non committate. Refuso "Entambi" in `FSettings`: **già corretto** in origine.
 
 Build: **0 errori** (warning ~1816, invariati rispetto a prima della sessione di log).
+
+---
+
+## 7. Sito web ordini / libreria EFMago (17-19/10/2026)
+
+Piano: sito Blazor Server (.NET 8) sul server di Biella per la **sola scrittura di
+ordini**; repo separato; il codice condiviso (context, modelli, helper, servizi) vive
+nella class library `src/EFMago` (net8.0) referenziata da entrambi i programmi.
+Branch: `feature/libreria-efmago`.
+
+- [x] **A0** — rename servizi (`GeneraRigheOrdineService` → `GenerazioneRigheOrdiniService`,
+      `AdeguaFattureService` → `AggiornamentoFattureService`) — commit "Refactor Nomi Service".
+- [x] **A** — estrazione libreria `EFMago` (`Data/`, `Common/` meno CrashLogger, `Orders/`,
+      `Invoicing/`; namespace invariati). Config disaccoppiata: `SqlTools.Configure(EfmagoOptions)`
+      + `AppConfig.SyncToLibrary()` per il WinForms; `LogTarget` spostato in `Common/LogTarget.cs`.
+      `copia.ps1` ora copia in `src\EFMago\Data`. AGENTS.md aggiornato.
+- [x] **B** — nuovo `Orders/CreazioneOrdiniService` (`CreaOrdine(CreazioneOrdineRequest)`):
+      testata `MaSaleOrd` + Summary/Shipping/Notes + righe da zero, contatori `SaleOrdId`
+      (`MA_IDNumbers`) e numero `yy/NNNNN` (`MA_NonFiscalNumbers`, riga anno nuovo creata
+      da template) allocati con `UPDATE ... OUTPUT` in transazione. Verificato su TMPSPA
+      con `tools/CreazioneOrdiniSmoke`: ordine `26/00001` (SaleOrdId 1002), contatori e
+      satelliti OK — l'ordine di prova è rimasto in TMPSPA, aprirlo da Mago per il
+      confronto visivo.
+- [ ] **C** — nuovo repo sito Blazor Server (login applicativo, form ordine); referenziare
+      `EFMago` via path/git; `appsettings.json` → `SqlTools.Configure`. Workload ASP.NET in
+      VS 2022 da installare (~2 GB).
+- [ ] **D** — form ordine (cliente, righe, note) sul sito.
+- [ ] **E** — deploy IIS su server Biella (HTTPS).
+
+Note per il sito: niente health/schema check a runtime (`ModelManifest` differito);
+istanziazione manuale dei servizi (niente DI nella libreria); stesso pattern contatori/audit.

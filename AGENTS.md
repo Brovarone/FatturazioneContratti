@@ -76,6 +76,13 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 - **AggiornamentoFattureService** — classe `static`, `UPDATE` SQL raw join `MA_SaleDocDetail` → `MA_SaleOrdDetails`, con `SqlConnection`/`SqlTransaction` ricevuti dal caller
   - Resta raw di proposito (l'`UPDATE ... FROM` su 3 tabelle è scomodo in EF), ma i valori sono presi dagli enum `MagoEnum` e il timestamp è unico per operazione
   - Unico residuo raw: i **nomi di tabella/colonna**, non tipizzati dal compilatore
+- **CreazioneOrdiniService** (`Orders/CreazioneOrdiniService.cs` + `Orders/CreazioneOrdineRequest.cs`) — `CreaOrdine(CreazioneOrdineRequest, logMessage)` → `EsitoCreazioneOrdine(SaleOrdId, InternalOrdNo, NumeroRighe)` o `null` su errore (dettaglio già loggato)
+  - Uso previsto: **sito web Blazor di sola scrittura ordini** (repo separato); i 4 workflow WinForms restano dove sono
+  - Crea da zero: testata `MaSaleOrd` + Summary/Shipping/Notes (tabelle 1:1, sempre presenti nei dati reali) + righe `MaSaleOrdDetails`
+  - Convenzioni replicate dai dati reali (ispezione 732 ordini, 10/2026): CustSuppType 3211264, AccTpl/InvRsn da `MaUserDefaultSaleOrders`, Currency EUR fallback, Presentation dall'anagrafica, TaxJournal "VEN", i 5 flag `*Auto` senza default Fluent valorizzati come Mago
+  - **Contatori atomici**: `SaleOrdId` da `MA_IDNumbers` e numero `yy/NNNNN` da `MA_NonFiscalNumbers` allocati con `UPDATE ... OUTPUT` dentro `ExecuteInBulkTransaction` (sicuro per utenti multipli del sito); la riga dell'anno fiscale nuovo viene creata clonando la più recente come template
+  - Testata/righe costruite su prototipi `AddNew<T>()` + `CloneFromPrototype()`; validazione input con lunghezze colonne reali (fallisce con messaggio di business, non con SqlException da troncamento)
+  - **Harness di verifica**: `tools/CreazioneOrdiniSmoke` (console net8.0) — `dotnet run --project tools/CreazioneOrdiniSmoke -- <server> <db> <user> <pwd> [loginId]`; usa SOLO DB di test (es. TMPSPA), crea un ordine di prova e stampa i record scritti
 
 ### UI (`Forms/`)
 - `FLogin` — form principale, orchestra i 4 workflow via `Task.Run` background
