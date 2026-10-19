@@ -37,6 +37,8 @@
          types ambigui / due entry point). -->
     <Compile Remove="EFMago\**" />
     <Compile Remove="tools\**" />
+    <EmbeddedResource Remove="EFMago\**" />
+    <None Remove="EFMago\**" />
     <ProjectReference Include="EFMago\EFMago.csproj" />
   </ItemGroup>
 
