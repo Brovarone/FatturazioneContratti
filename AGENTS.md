@@ -32,7 +32,7 @@ Tutte le impostazioni runtime in `AppConfig` (classe statica, JSON-backed):
 
 ## Architettura e Componenti Chiave
 
-### Libreria `EFMago` (`src/EFMago/`, progetto `EFMago.csproj`, `net8.0`)
+### Libreria `EFMago` (`EFMago/`, progetto `EFMago.csproj`, `net8.0`)
 Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del 16/10/2026):
 - Contiene `Data/`, `Common/` (tranne `CrashLogger.cs`), `Orders/`, `Invoicing/` — logica di dominio **senza alcuna dipendenza WinForms**
 - `SqlTools.Configure(EfmagoOptions)` + `SqlTools.Options` — sorgente unica di connessione/debug/log-mode per la libreria
@@ -40,13 +40,13 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 - Il WinForms la referenzia via `ProjectReference`; il sito la referenzierà dal suo repo
 - Namespace invariati (`FatturazioneContratti.*`) per non toccare i consumatori
 
-### Data Layer (`src/EFMago/Data/`)
+### Data Layer (`EFMago/Data/`)
 - `FattureContext` — **DbContext manuale** (non generato). Contiene `OnModelCreating` con 100+ entity configurations, relazioni custom, `HasDefaultValueSql` per default Mago. **Modificare direttamente qui** quando serve.
 - `Data/Models/` — **Generati** da `copia.ps1` (copia 100+ classi entità da `ALLMigrazione\EFMago\Models\`). Non modificare a mano.
 - `SqlTools.CreateContext()` — factory; rispetta `EfmagoOptions` + flag `IsDebugging` (registrate dall'ospite via `Configure`).
 - `SqlTools.OpenDirectConnection()` — `SqlConnection` raw con `ARITHABORT ON` (richiesto per indici filtrati Mago).
 
-### Modelli di Dominio (`src/EFMago/Common/`, `Orders/`, `Invoicing/`)
+### Modelli di Dominio (`EFMago/Common/`, `Orders/`, `Invoicing/`)
 | File | Scopo |
 |------|-------|
 | `DomainConstants.cs` | Sentinella `DataNulla = 1799-12-31`, costanti precisione decimali |
@@ -61,7 +61,7 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 | `CrashLogger.cs` | Log crash globale (`crash_yyyyMMdd_HHmmss_fff.log`), chiamato dai handler in `Program.cs` |
 | `BulkPersistenceHelper` | Wrapper `EFCore.BulkExtensions`; esegue `BulkInsert`/`BulkUpdate`/`BulkInsertOrUpdate` in transazione con `DBCC TRACEON(610)` per minimal logging |
 
-### Servizi (`src/EFMago/Orders/`, `Invoicing/`)
+### Servizi (`EFMago/Orders/`, `Invoicing/`)
 - **GenerazioneRigheOrdiniService** (partial, file `.cs` + `.Istat.cs`) — `GeneraRigheOrdine(GeneraRigheOrdineOptions)`, `AdeguaIstatOrdine()`
   - Firma a record unico: `GeneraRigheOrdineOptions` raggruppa filtri, `DimensioneBlocco` e callback (log, stato, 2 progress)
   - Corpo scomposto: `ApplicaFiltriComuni` / `EstraiIdsOrdini` (condivisi con ISTAT) + `CaricaDefaultVenditeIva`
@@ -95,7 +95,7 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 ### Aggiorna Modelli Entità (quando cambia schema Mago / migrazione ERP)
 ```powershell
 # Da root repo; copia SOLO i model (classi entità) da ALLMigrazione
-# Destinazione: src\EFMago\Data\ ( Models\ + FattureContext.cs )
+# Destinazione: EFMago/Data\ ( Models\ + FattureContext.cs )
 .\copia.ps1
 ```
 Poi rebuild. **Il `FattureContext.cs` NON viene toccato** — aggiornare manualmente `OnModelCreating` se servono nuove relazioni/colonne.
@@ -146,11 +146,11 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 ## Mappa Proprietà File
 | Directory | Proprietario | Note |
 |-----------|--------------|------|
-| `src/EFMago/Data/Models/` | **Generati** — modifica solo via `copia.ps1` |
-| `src/EFMago/Data/FattureContext.cs` | **Manuale** — DbContext custom, `OnModelCreating` mantenuto a mano |
-| `src/EFMago/Common/` | Primitive dominio condivise (enum, costanti, estensioni) — libreria |
-| `src/EFMago/Orders/` | Logica generazione canoni/ISTAT — libreria |
-| `src/EFMago/Invoicing/` | Logica consuntivo + allineamento fatture — libreria |
+| `EFMago/Data/Models/` | **Generati** — modifica solo via `copia.ps1` |
+| `EFMago/Data/FattureContext.cs` | **Manuale** — DbContext custom, `OnModelCreating` mantenuto a mano |
+| `EFMago/Common/` | Primitive dominio condivise (enum, costanti, estensioni) — libreria |
+| `EFMago/Orders/` | Logica generazione canoni/ISTAT — libreria |
+| `EFMago/Invoicing/` | Logica consuntivo + allineamento fatture — libreria |
 | `Common/CrashLogger.cs` | **Resta nel WinForms** (referenzia WinForms + AppConfig) |
 | `Forms/` | Solo UI WinForms; niente business logic |
 | `Config/` | `AppConfig` — unica fonte verità per settings del WinForms (poi `SyncToLibrary()`) |
@@ -159,7 +159,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 ## Task Comuni
 
 ### Aggiungere nuova tabella Mago
-1. Aggiungi a progetto EF `ALLMigrazione` → scaffold → esegui `copia.ps1` (copia il model in `src/EFMago/Data/Models/`)
+1. Aggiungi a progetto EF `ALLMigrazione` → scaffold → esegui `copia.ps1` (copia il model in `EFMago/Data/Models/`)
 2. In `FattureContext.cs`: aggiungi `DbSet<T>` + configurazione in `OnModelCreating` (chiavi, relazioni, `HasDefaultValueSql`)
 3. Se serve `AddNew<T>()` support: nessuna modifica codice (estensione legge default Fluent API automaticamente)
 

@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\EFMago\EFMago.csproj" />
+    <ProjectReference Include="..\..\EFMago\EFMago.csproj" />
   </ItemGroup>
 
 </Project>

@@ -7,7 +7,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FatturazioneContratti", "Fa
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EFMago", "src\EFMago\EFMago.csproj", "{D680CBE6-2360-477A-9C0C-FB74DE6A1EE4}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EFMago", "EFMago\EFMago.csproj", "{D680CBE6-2360-477A-9C0C-FB74DE6A1EE4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

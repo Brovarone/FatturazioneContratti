@@ -277,7 +277,7 @@ Build: **0 errori** (warning ~1816, invariati rispetto a prima della sessione di
 
 Piano: sito Blazor Server (.NET 8) sul server di Biella per la **sola scrittura di
 ordini**; repo separato; il codice condiviso (context, modelli, helper, servizi) vive
-nella class library `src/EFMago` (net8.0) referenziata da entrambi i programmi.
+nella class library `EFMago` (net8.0, cartella alla root del repo) referenziata da entrambi i programmi.
 Branch: `feature/libreria-efmago`.
 
 - [x] **A0** — rename servizi (`GeneraRigheOrdineService` → `GenerazioneRigheOrdiniService`,
@@ -285,7 +285,7 @@ Branch: `feature/libreria-efmago`.
 - [x] **A** — estrazione libreria `EFMago` (`Data/`, `Common/` meno CrashLogger, `Orders/`,
       `Invoicing/`; namespace invariati). Config disaccoppiata: `SqlTools.Configure(EfmagoOptions)`
       + `AppConfig.SyncToLibrary()` per il WinForms; `LogTarget` spostato in `Common/LogTarget.cs`.
-      `copia.ps1` ora copia in `src\EFMago\Data`. AGENTS.md aggiornato.
+      `copia.ps1` ora copia in `EFMago\Data`. AGENTS.md aggiornato.
 - [x] **B** — nuovo `Orders/CreazioneOrdiniService` (`CreaOrdine(CreazioneOrdineRequest)`):
       testata `MaSaleOrd` + Summary/Shipping/Notes + righe da zero, contatori `SaleOrdId`
       (`MA_IDNumbers`) e numero `yy/NNNNN` (`MA_NonFiscalNumbers`, riga anno nuovo creata
