@@ -357,7 +357,6 @@ namespace FatturazioneContratti.Orders
                     if (esito)
                     {
                         string esitoMsg = $"Processati con successo: {totOrdiniOk} ordini per adeguamento ISTAT.";
-                        bulkMessage.AppendLine(esitoMsg);
                         LogDiagnostica.Informativo(logMessage, esitoMsg);
                     }
                     else

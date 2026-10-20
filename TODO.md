@@ -48,11 +48,16 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
 
 **Decisioni prese (16/10/2026)**:
 - **Routing**: errori/anomalie/rollback → `LogTarget.Both`; informativi (filtri,
-  conteggi, riepiloghi, statistiche bulk) → `AppConfig.LogMode`; `debugging` (tracciato
-  lungo) → `LogTarget.File` **solo se** `AppConfig.IsDebugging`.
+  conteggi, riepiloghi) → `AppConfig.LogMode`; statistiche bulk → `LogTarget.File`
+  (sempre); `debugging` (tracciato lungo) → `LogTarget.File` **solo se** `AppConfig.IsDebugging`.
   - **Agg. 20/10/2026**: i **filtri della run** sono passati a `LogTarget.File`
     (sempre): non servono a video e con `LogMode = Ui` inondavano il ListBox.
-    Modifica in `LogDiagnostica.LogFiltri` (una riga); informativi/bulk restano su LogMode.
+    Modifica in `LogDiagnostica.LogFiltri` (una riga).
+  - **Agg. 20/10/2026 (2)**: anche le **statistiche bulk** (`MaSaleDoc ... Righe:2 Ins:2 ...`,
+    una riga per tabella) sono passate a `LogTarget.File` sempre: a video non servono,
+    basta la sintesi di esito emessa dal servizio (es. `Fatture generate: 2 testate, 6 righe`).
+    Modifica in `LogDiagnostica.Scarica`; rimossi i due `bulkMessage.AppendLine` che
+    duplicavano la sintesi nel file.
 - Blocchi multi-riga: **riga per riga** quando il target include la UI (senza il
   `lstStato.Items.Add` con `\n` diventa illeggibile), altrimenti un solo `Invoke`.
 - Filtri nel workflow consuntivo: loggati **due volte** (uno per servizio) — ogni step

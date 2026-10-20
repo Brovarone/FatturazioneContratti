@@ -800,7 +800,7 @@ namespace FatturazioneContratti.Invoicing
                     if (!esito) return false;
 
                     LogDiagnostica.Informativo(logMessage,
-                        $"Fatture generate con successo: {efMaSaleDoc.Count} testate, {efMaSaleDocDetails.Count} righe");
+                        $"Fatture generate: {efMaSaleDoc.Count}");
                 }
 
                 return true;

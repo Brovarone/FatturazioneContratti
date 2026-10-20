@@ -8,7 +8,8 @@ namespace FatturazioneContratti.Common
     /// Routing dei log in un punto solo (decisioni del 16/10/2026, vedi TODO §1b):
     /// - errori / anomalie / rollback  -> <see cref="LogTarget.Both"/> (sempre visibili)
     /// - filtri della run              -> <see cref="LogTarget.File"/> (solo file, sempre)
-    /// - informativi (conteggi, riepiloghi, statistiche bulk) -> <see cref="SqlTools.Options.LogMode"/>
+    /// - informativi (conteggi, riepiloghi di esito) -> <see cref="SqlTools.Options.LogMode"/>
+    /// - statistiche bulk (dettaglio tabella per tabella) -> <see cref="LogTarget.File"/> (solo file, sempre)
     /// - debugging (tracciato lungo)  -> <see cref="LogTarget.File"/> solo se <see cref="SqlTools.Options.IsDebugging"/>
     ///
     /// I blocchi multi-riga, quando il target include la UI, vanno emessi riga per riga:
@@ -73,8 +74,10 @@ namespace FatturazioneContratti.Common
             if (avvisi != null && avvisi.Length > 0)
                 Emetti(log, avvisi.ToString(), LogTarget.Both);
 
+            // Statistiche bulk (una riga per tabella): dettaglio tecnico, va solo sul file.
+            // A video l'utente vuole la sintesi di esito, che il servizio emette con Informativo.
             if (bulk != null && bulk.Length > 0)
-                Emetti(log, bulk.ToString(), SqlTools.Options.LogMode);
+                log(bulk.ToString(), LogTarget.File);
 
             // Tracciato diagnostico voluminoso: solo file, solo in modalità debug.
             if (debugging != null && debugging.Length > 0 && SqlTools.Options.IsDebugging)

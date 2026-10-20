@@ -956,7 +956,6 @@ namespace FatturazioneContratti.Orders
             if (esito)
             {
                 string riassunto = $"[RIASSUNTO] Ordini con Righe: {totNuove} | Ordini con Adeguamenti: {totAggiornate}";
-                bulkMessage.AppendLine(riassunto);
                 LogDiagnostica.Informativo(logMessage, riassunto);
             }
 
