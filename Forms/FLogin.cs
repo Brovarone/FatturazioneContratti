@@ -305,10 +305,10 @@ namespace FatturazioneContratti.Forms
             // UI iniziale
             SetUiBusy(true);
             lnkApriLog.Visible = false;   // via il link della sessione precedente
-            Log($"=== AVVIO: {nomeProcesso} ({DateTime.Now:dd/MM/yyyy HH:mm:ss}) ===");
+            Log($"=== {nomeProcesso} ({DateTime.Now:dd/MM/yyyy HH:mm:ss}) ===");
             // Nel file di sessione deve restare traccia del DB usato (produzione o test):
             // l'etichetta lo mostra, ma il log no, e in lettura è la prima cosa che serve.
-            Log($"Database: {AppConfig.DatabaseInUse}{(AppConfig.IsTestDb ? " [TEST]" : "")} - Modalità log: {AppConfig.LogMode}");
+            Log($"Database: {AppConfig.DatabaseInUse}{(AppConfig.IsTestDb ? " [TEST]" : "")}");
 
             // Esegui il lavoro su background per non bloccare la UI
             System.Threading.Tasks.Task.Run(() =>

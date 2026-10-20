@@ -74,7 +74,12 @@ namespace FatturazioneContratti.Data
         {
             var options = Options;
             var optionsBuilder = new DbContextOptionsBuilder<FattureContext>();
-            optionsBuilder.UseSqlServer(GetCurrentConnectionString());
+            // UseCompatibilityLevel(100): i DB Mago (ALLSPA/TMPSPA) sono a compatibility_level 100
+            // (SQL Server 2008). Senza questa opzione EF Core 8 traduce i Contains su collezioni
+            // parametrizzate con OPENJSON ... WITH, che SQL Server rifiuta con "sintassi non
+            // corretta in prossimità della parola chiave 'WITH'" quando il compat è < 130.
+            optionsBuilder.UseSqlServer(GetCurrentConnectionString(),
+                sqlOptions => sqlOptions.UseCompatibilityLevel(100));
 
             if (options.IsDebugging)
             {
