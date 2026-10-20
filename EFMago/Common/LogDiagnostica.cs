@@ -7,7 +7,8 @@ namespace FatturazioneContratti.Common
     /// <summary>
     /// Routing dei log in un punto solo (decisioni del 16/10/2026, vedi TODO §1b):
     /// - errori / anomalie / rollback  -> <see cref="LogTarget.Both"/> (sempre visibili)
-    /// - informativi (filtri, conteggi, riepiloghi, statistiche bulk) -> <see cref="SqlTools.Options.LogMode"/>
+    /// - filtri della run              -> <see cref="LogTarget.File"/> (solo file, sempre)
+    /// - informativi (conteggi, riepiloghi, statistiche bulk) -> <see cref="SqlTools.Options.LogMode"/>
     /// - debugging (tracciato lungo)  -> <see cref="LogTarget.File"/> solo se <see cref="SqlTools.Options.IsDebugging"/>
     ///
     /// I blocchi multi-riga, quando il target include la UI, vanno emessi riga per riga:
@@ -41,14 +42,16 @@ namespace FatturazioneContratti.Common
             => log?.Invoke(messaggio, LogTarget.Both);
 
         /// <summary>
-        /// Emette i filtri della run (riga per riga, seguendo LogMode). Ricostruisce sempre
-        /// il testo, così il servizio non dipende dalla chiamata fatta dal form.
+        /// Emette i filtri della run **solo su file** (testo intero in un colpo solo):
+        /// è il registro completo della run, non serve a video e con LogMode = Ui
+        /// inondava il ListBox. Ricostruisce sempre il testo, così il servizio non
+        /// dipende dalla chiamata fatta dal form.
         /// </summary>
         public static void LogFiltri(Action<string, LogTarget>? log, ILogFiltri? filtri)
         {
             if (log == null || filtri == null) return;
             filtri.CostruisciFiltriLog();
-            Emetti(log, filtri.LogFiltri.ToString(), SqlTools.Options.LogMode);
+            Emetti(log, filtri.LogFiltri.ToString(), LogTarget.File);
         }
 
         /// <summary>

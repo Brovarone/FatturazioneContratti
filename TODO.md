@@ -50,6 +50,9 @@ Note: `LogTarget.Both` esiste già; `debugging` accumula tutto il tracciato diag
 - **Routing**: errori/anomalie/rollback → `LogTarget.Both`; informativi (filtri,
   conteggi, riepiloghi, statistiche bulk) → `AppConfig.LogMode`; `debugging` (tracciato
   lungo) → `LogTarget.File` **solo se** `AppConfig.IsDebugging`.
+  - **Agg. 20/10/2026**: i **filtri della run** sono passati a `LogTarget.File`
+    (sempre): non servono a video e con `LogMode = Ui` inondavano il ListBox.
+    Modifica in `LogDiagnostica.LogFiltri` (una riga); informativi/bulk restano su LogMode.
 - Blocchi multi-riga: **riga per riga** quando il target include la UI (senza il
   `lstStato.Items.Add` con `\n` diventa illeggibile), altrimenti un solo `Invoke`.
 - Filtri nel workflow consuntivo: loggati **due volte** (uno per servizio) — ogni step
