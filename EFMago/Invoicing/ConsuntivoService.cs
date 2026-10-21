@@ -132,6 +132,10 @@ namespace FatturazioneContratti.Invoicing
             var eventoErrorList = new List<string>();
             int associati = 0;   // interventi agganciati a una riga contratto con esito positivo
 
+            // Tempo delle fasi: dal 21/10/2026 le run via VPN sono lente e il log deve
+            // dire da solo dove se ne va il tempo (estrazione, salvataggio, bulk).
+            var cronometro = Stopwatch.StartNew();
+
             try
             {
                 // I filtri della run vengono registrati a file/UI: senza questo il log
@@ -152,21 +156,6 @@ namespace FatturazioneContratti.Invoicing
                 // restringe le distinte candidate; gli interventi si agganciano solo a queste.
                 if (filtri.SingoloOrdine && !string.IsNullOrWhiteSpace(filtri.NrOrdine))
                     distintaQuery = distintaQuery.Where(wsa => wsa.AllordCliContratto.SaleOrd.InternalOrdNo == filtri.NrOrdine);                                           
-
-                var allDistinte = distintaQuery
-                    .Select(x => new MiniDistinta
-                    {
-                        NrOrdine = x.AllordCliContratto.SaleOrd.InternalOrdNo,
-                        Filiale = x.AllordCliContratto.SaleOrd.CostCenter,
-                        Priorita = x.AllordCliContratto.SaleOrd.Priority,
-                        CodIntegra = x.CodIntegra,
-                        DataCessazione = x.AllordCliContratto.SaleOrd.ALLOrdCliAcc.DataCessazione ?? DomainConstants.DataNulla,
-                        DataScadenzaFissa = x.AllordCliContratto.SaleOrd.ALLOrdCliAcc.DataScadenzaFissa ?? DomainConstants.DataNulla,
-                        AllordCliContrattoDistintaServAgg = x.AllordCliContrattoDistintaServAgg,
-                        AlltipoRigaServizio = x.AlltipoRigaServizio,
-                        Servizio = x.Servizio
-                    })
-                    .ToList();
 
                 IQueryable<IntegraInterventi> intQuery = _ordiniCntx.IntegraInterventi.AsQueryable();
 
@@ -196,11 +185,39 @@ namespace FatturazioneContratti.Invoicing
                     return true;
                 }
 
+                // Distinte filtrate sui soli contratti degli interventi: la tabella intera
+                // (migliaia di contratti × servizi) via VPN costava ~30s a run anche con
+                // pochi interventi (21/10/2026). Il lookup per codice resta identico.
+                var contrattiNecessari = allInterventi
+                    .Select(i => i.Contratto)
+                    .Where(c => !string.IsNullOrWhiteSpace(c))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+                updateStatus?.Invoke("Estrazione distinte contratti...");
+
+                var allDistinte = distintaQuery
+                    .Where(wsa => contrattiNecessari.Contains(wsa.CodIntegra))
+                    .Select(x => new MiniDistinta
+                    {
+                        NrOrdine = x.AllordCliContratto.SaleOrd.InternalOrdNo,
+                        Filiale = x.AllordCliContratto.SaleOrd.CostCenter,
+                        Priorita = x.AllordCliContratto.SaleOrd.Priority,
+                        CodIntegra = x.CodIntegra,
+                        DataCessazione = x.AllordCliContratto.SaleOrd.ALLOrdCliAcc.DataCessazione ?? DomainConstants.DataNulla,
+                        DataScadenzaFissa = x.AllordCliContratto.SaleOrd.ALLOrdCliAcc.DataScadenzaFissa ?? DomainConstants.DataNulla,
+                        AllordCliContrattoDistintaServAgg = x.AllordCliContrattoDistintaServAgg,
+                        AlltipoRigaServizio = x.AlltipoRigaServizio,
+                        Servizio = x.Servizio
+                    })
+                    .ToList();
+
                 // Indice per codice contratto: la vecchia Where su lista rieseguiva la scansione
                 // delle distinte per ogni intervento (O(interventi × distinte)).
                 var distintePerCodice = allDistinte.ToLookup(x => x.CodIntegra, StringComparer.OrdinalIgnoreCase);
 
-                LogDiagnostica.Informativo(logMessage, $"Interventi estratti: {allInterventi.Count}");
+                LogDiagnostica.Informativo(logMessage,
+                    $"Interventi estratti: {allInterventi.Count} | caricamento: {cronometro.Elapsed.TotalSeconds:0.0}s");
 
                 // Progress a blocchi da 100 record (stessa logica di GenerazioneRigheOrdiniService):
                 // barra grande = blocchi, barra piccola = record del blocco corrente.
@@ -342,7 +359,7 @@ namespace FatturazioneContratti.Invoicing
                     logMessage?.Invoke(dettaglio.ToString(), LogTarget.File);
 
                     // Anomalie solo "non critiche" (contratti mancanti / eventi non associati):
-                    // con il flag "Prosegui comunque" si prosegue, le sezioni di dettaglio
+                    // con il flag "Prosegui elaborazione" si prosegue, le sezioni di dettaglio
                     // sono già state emesse sopra come sempre.
                     bool soloAnomalieNonCritiche = fatalContrattoErrorList.Count == 0
                                                   && fatalEventoErrorList.Count == 0;
@@ -350,9 +367,9 @@ namespace FatturazioneContratti.Invoicing
                     if (soloAnomalieNonCritiche && filtri.ProseguiAnomalie)
                     {
                         LogDiagnostica.Avviso(logMessage,
-                            "Prosegui comunque attivo: anomalie non critiche " +
-                            $"({contrattoErrorList.Count} contratti mancanti / {eventoErrorList.Count} eventi non agganciati) " +
-                            "segnalate, si prosegue comunque con la fatturazione.");
+                            "Prosegui elaborazione attivo: anomalie non critiche segnalate " +
+                            $"({contrattoErrorList.Count} contratti mancanti / {eventoErrorList.Count} eventi non agganciati), " +
+                            "si prosegue comunque con la fatturazione.");
                         return true;
                     }
 
@@ -403,6 +420,10 @@ namespace FatturazioneContratti.Invoicing
             var avvisiCessati = new List<string>();
             int contrattiCessatiConInterventi = 0;
             int interventiSuContrattiCessati = 0;
+
+            // Tempo delle fasi (vedi ControllaFlussoIntegra): il log deve dire da solo
+            // dove se ne va il tempo quando la run passa dalla VPN.
+            var cronometro = Stopwatch.StartNew();
 
             try
             {
@@ -490,12 +511,17 @@ namespace FatturazioneContratti.Invoicing
                     .ThenBy(o => o.ContractCode)
                     .ThenBy(o => o.Payment)
                     .ThenBy(o => o.Carrier1)
+                    // AsSplitQuery: senza, le collection Include (distinte × servizi × item,
+                    // descrizioni, fatturazione elettronica, acc) producono un prodotto
+                    // cartesiano enorme — ~90s via VPN per 34 ordini (log 21/10/2026).
+                    .AsSplitQuery()
                     .ToList();
 
                 // Conteggi della run: interventi estratti, ordini distinti ricavati dagli
                 // interventi e ordini effettivamente caricati da MA_SaleOrd.
                 LogDiagnostica.Informativo(logMessage,
-                    $"Interventi estratti: {interventiList.Count} | Ordini distinti: {aOrdini.Length} | Ordini caricati: {ordiniList.Count}");
+                    $"Interventi estratti: {interventiList.Count} | Ordini distinti: {aOrdini.Length} | Ordini caricati: {ordiniList.Count}" +
+                    $" | caricamento: {cronometro.Elapsed.TotalSeconds:0.0}s");
 
                 // Discrepanza = intervento che punta a un ordine assente in MA_SaleOrd.
                 // Col filtro singolo ordine la differenza è voluta (si carica un ordine solo).
@@ -917,7 +943,7 @@ namespace FatturazioneContratti.Invoicing
                     if (!esito) return false;
 
                     LogDiagnostica.Informativo(logMessage,
-                        $"Fatture generate: {efMaSaleDoc.Count}");
+                        $"Fatture generate: {efMaSaleDoc.Count} | tempo totale: {cronometro.Elapsed.TotalSeconds:0.0}s");
                 }
 
                 return true;
