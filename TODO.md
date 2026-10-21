@@ -380,3 +380,44 @@ riepilogo `Trovati X interventi su Y contratti cessati: verificare in Integra.`
   verso SQL raggiungibile in LAN. Opzioni pratiche: spegnerla per le run,
   configurare split-tunneling per IP del server SQL, oppure lavorare via RDP
   su una macchina in sede (il traffico SQL resta in LAN).
+
+---
+
+## 10. Appunti — colonne ridondanti su distinta/servaggi (21/10/2026)
+
+Analisi su ALLSPA in sola lettura: le colonne "di stato" ripetute sui tre livelli
+(contratto → distinta → servizio aggiuntivo) **restano tutte**, ma solo quella di
+contratto è viva. Decisione: lasciare le colonne, non allinearle a forza, non
+usarle nelle decisioni. Dettaglio in `AGENTS.md` convenzioni 14 e 15.
+
+### `DataProssimaFatt` (3 tabelle)
+
+- **Viva**: `ALLOrdCliContratto` — letta da `CurOrdRow(AllordCliContratto)` e
+  riscritta a fine elaborazione (`ElaboraContratto`). È la base dei calcoli canoni.
+- **Deprecate**: `ALLOrdCliContratto_Distinta` e `..._Distinta_ServAgg` —
+  popolate solo dall'import Fox (`ContrattiFox.vb`), mai mantenute dai workflow.
+- Dati 21/10: distinta vs contratto → 990 uguali, **272 indietro**, 6 avanti;
+  servagg vs distinta → 584 uguali, **535 indietro**, 55 avanti. Nessuna vista,
+  procedura o trigger le cita.
+- Se un domani servono (es. consuntivo per servizio): vanno prima riallineate.
+
+### `TipoRigaServizio` (3 tabelle)
+
+- **Decisionale solo sul contratto**: `CurOrdRow` / `ElaboraContratto` /
+  `CurOrdRowCalculations.IsBewteenPeriodo` / ISTAT leggono
+  `c.AlltipoRigaServizio` (tipologia, periodicità, cadenza, campagna).
+- **Ridondante su distinta e servaggi**: nessun flusso la legge. Il consuntivo
+  usa `Periodicita`, `Franchigia`, `Servizio` della **riga servagg**, non il FK
+  tipo; la distinta ha il tipo solo proiettato in `MiniDistinta` e mai consumato.
+- Dati 21/10: contratto vs distinta → 1.214 uguali, **54 diversi**, tutti
+  campagna `ESTANT`: 40 distinte campagna sotto contratto canone (37 ordini, e
+  **tutti e 40 gli ordini hanno già la riga contratto `ESTANT`**), 14 distinte
+  canone sotto contratto campagna. Distinta vs servagg: 0 uguali su 1.174
+  (servagg = Consuntivo in 1.166 casi) — è per costruzione: il servagg è la
+  componente misurata a consuntivo.
+- **Non allineare** distinta/servagg al tipo contratto: si perderebbe
+  l'informazione campagna, senza alcun beneficio (il motore ignora quei tipi).
+- Se in futuro serve fatturare per componente: definire prima il proprietario
+  del tipo (proposta: contratto = fatturazione, distinta = composizione,
+  servagg = misurazione) e una sola decisione per livello.
+
