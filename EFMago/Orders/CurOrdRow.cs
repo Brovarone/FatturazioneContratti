@@ -256,6 +256,10 @@ namespace FatturazioneContratti.Orders
         /// (ex New(s As AllordCliContrattoDistintaServAgg)).
         /// NOTA ereditata dal VB: "per ora lavora male non usare" — porting fedele,
         /// ma da validare/rivedere prima di usarla in produzione.
+        /// ATTENZIONE: nessun flusso la usa e legge s.DataProssimaFatt, che è una delle
+        /// due colonne deprecate (popolate solo dall'import Fox, mai mantenute: valore
+        /// fermo all'import — vedi AGENTS.md, convenzione 14). Se in futuro si adotta
+        /// questo costruttore, prima va riallineata quella data.
         /// </summary>
         public CurOrdRow(AllordCliContrattoDistintaServAgg s) : this()
         {

@@ -566,6 +566,10 @@ namespace EFMago.Models
                     .HasColumnType("datetime")
                     .HasDefaultValueSql("('17991231')");
 
+                // DataProssimaFatt - colonna VIVA: prossima fatturazione dei canoni.
+                // Letta da CurOrdRow(AllordCliContratto) e riscritta a fine elaborazione
+                // da GenerazioneRigheOrdiniService.ElaboraContratto. E' l'unica delle tre
+                // DataProssimaFatt usata dai workflow (vedi AGENTS.md, convenzione 14).
                 entity.Property(e => e.DataProssimaFatt)
                     .HasColumnName("DataProssimaFatt")
                     .HasColumnType("datetime")
@@ -751,6 +755,10 @@ namespace EFMago.Models
                     .HasColumnType("datetime")
                     .HasDefaultValueSql("('17991231')");
 
+                // DataProssimaFatt - DEPRECATA sulla distinta: popolata solo dall'import
+                // Fox (ContrattiFox.vb) e mai mantenuta dai workflow: resta ferma al
+                // valore d'import. Conservata per un eventuale uso futuro: non
+                // eliminarla (vedi AGENTS.md, convenzione 14).
                 entity.Property(e => e.DataProssimaFatt)
                     .HasColumnName("DataProssimaFatt")
                     .HasColumnType("datetime")
@@ -849,6 +857,10 @@ namespace EFMago.Models
                     .HasColumnType("datetime")
                     .HasDefaultValueSql("('17991231')");
 
+                // DataProssimaFatt - DEPRECATA sul servizio aggiuntivo: popolata solo
+                // dall'import Fox (ContrattiFox.vb), mai mantenuta dai workflow
+                // (CurOrdRow(ServAgg) e' codice non usato). Conservata per un eventuale
+                // uso futuro: non eliminarla (vedi AGENTS.md, convenzione 14).
                 entity.Property(e => e.DataProssimaFatt)
                     .HasColumnName("DataProssimaFatt")
                     .HasColumnType("datetime")

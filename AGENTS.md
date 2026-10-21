@@ -142,6 +142,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 11. **Valori Mago dagli enum** — Per `LineType` / `DocumentType` / `CrossReference` usare `Common/MagoEnum.cs`, mai numeri hardcoded (neppure nelle query raw).
 12. **Callback inutilizzati vanno rimossi** — Le firme pubbliche espongono solo callback realmente usati: se ne resta uno morto (es. il vecchio `progress3`), eliminarlo invece di mantenerlo a `null`.
 13. **Stato di elaborazione esplicito** — Quando un metodo supera ~150 righe, raggruppa collettori/accumulatori in una classe di stato (`StatoElaborazioneOrdini`) invece di moltiplicare parametri `out`/`ref`.
+14. **`DataProssimaFatt`: una sola colonna viva su tre** — esiste su `ALLOrdCliContratto` (viva: unica letta/scritta dai canoni, `CurOrdRow(AllordCliContratto)` + `ElaboraContratto`), su `ALLOrdCliContratto_Distinta` e su `ALLOrdCliContratto_Distinta_ServAgg` (deprecate: popolate solo dall'import Fox `ContrattiFox.vb`, mai mantenute, quindi ferme al valore d'import — verificate 21/10/2026: 272 distinte e 535 servagg già divergenti). Non eliminarle: potrebbero servire in futuro (consuntivo per servizio, sito). Se le si adotta, riallinearle e aggiornare questa nota.
 
 ## Mappa Proprietà File
 | Directory | Proprietario | Note |
