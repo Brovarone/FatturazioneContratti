@@ -339,9 +339,9 @@ riepilogo `Trovati X interventi su Y contratti cessati: verificare in Integra.`
 
 ## 9. Sessione 21/10 pomeriggio — log a video + velocizzazione VPN
 
-- [x] **Anomalie controllo flusso a video**: dettaglio ora emesso anche nel
-      ListBox colorato (sezioni `[ERRORE]`/`[AVVISO]`, voci indentate) oltre che
-      nel file (`ConsuntivoService`, emissione via `LogDiagnostica.Blocco`, Both).
+- [x] **Anomalie controllo flusso**: a video SOLO la riga di sintesi `[AVVISO]`
+      con i contatori (arancio nel ListBox); l'elenco completo va SOLO su file,
+      blocco unico con dettaglio indentato (decisione utente 21/10 pm).
 - [x] **`lblStatus` resettata** a inizio ogni run ("Elaborazione in corso...",
       nero): restava rossa con l'esito della run precedente.
 - [x] **Timeout comandi 600s**: nuova costante `SqlTools.CommandTimeoutSeconds`,
@@ -351,14 +351,15 @@ riepilogo `Trovati X interventi su Y contratti cessati: verificare in Integra.`
 - [x] **Clienti ridotti**: `GeneraFattureConsuntivo` carica solo i `MaCustSupp`
       (+options) degli `InvoicingCustomer` presenti negli ordini estratti;
       l'anagrafica intera di ALLSPA (migliaia di righe) era la query morta via VPN.
-- [ ] **Pulsante "Interrompi"**: proposta da decidere — `CancellationToken`
-      propagato ai 4 workflow, controllato ai confini di blocco (ordine/gruppo);
-      mai a metà transazione bulk (lì si preferisce far completare il blocco in
-      atto e stoppare prima del successivo).
-- [ ] **Politica blocco anomalie**: oggi QUALUNQUE anomalia != 0 interrompe la
-      fatturazione (comportamento VB). Valutare: bloccare solo su anomalie
-      critiche (duplicati contratto/evento) e di proseguire su "mancanti"
-      (contratto/evento non agganciato), segnalandoli.
+- [x] **Pulsante "Interrompi"**: `CancellationToken` propagato ai 4 workflow,
+      check ai confini di blocco (ordine/contratto/intervento/chunk); se il
+      token arriva con transazione bulk aperta → **rollback esplicito** + throw
+      (decisione utente). `EseguiOperazione` gestisce `OperationCanceledException`
+      come esito "INTERROTTO" (arancio), non errore critico.
+- [x] **Checkbox "Prosegui comunque"** nel form filtri consuntivo (default
+      false, attiva solo con lo step controllo abilitato): se ON e ci sono SOLO
+      anomalie non critiche (contratti mancanti / eventi non associati) si
+      prosegue con la fatturazione; anomalie critiche (duplicati) bloccano comunque.
 - **Case VPN**: VPN full-tunnel di sistema rallenta TUTTE le connessioni, anche
   verso SQL raggiungibile in LAN. Opzioni pratiche: spegnerla per le run,
   configurare split-tunneling per IP del server SQL, oppure lavorare via RDP
