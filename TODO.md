@@ -334,3 +334,32 @@ riepilogo `Trovati X interventi su Y contratti cessati: verificare in Integra.`
 
 > Da fare in Mago su ALLSPA: annullare/eliminare le fatture `SaleDocId` 59240 e 59241
 > (30/09/2026, cliente E50089) scritte con la regola sbagliata, poi rilanciare.
+
+---
+
+## 9. Sessione 21/10 pomeriggio — log a video + velocizzazione VPN
+
+- [x] **Anomalie controllo flusso a video**: dettaglio ora emesso anche nel
+      ListBox colorato (sezioni `[ERRORE]`/`[AVVISO]`, voci indentate) oltre che
+      nel file (`ConsuntivoService`, emissione via `LogDiagnostica.Blocco`, Both).
+- [x] **`lblStatus` resettata** a inizio ogni run ("Elaborazione in corso...",
+      nero): restava rossa con l'esito della run precedente.
+- [x] **Timeout comandi 600s**: nuova costante `SqlTools.CommandTimeoutSeconds`,
+      applicata a `CreateContext` (era 180s: esattamente i ~183s del timeout di
+      mattina alle 10:11) e al `SqlCommand` raw di `AggiornamentoFattureService`
+      (default ADO 30s).
+- [x] **Clienti ridotti**: `GeneraFattureConsuntivo` carica solo i `MaCustSupp`
+      (+options) degli `InvoicingCustomer` presenti negli ordini estratti;
+      l'anagrafica intera di ALLSPA (migliaia di righe) era la query morta via VPN.
+- [ ] **Pulsante "Interrompi"**: proposta da decidere — `CancellationToken`
+      propagato ai 4 workflow, controllato ai confini di blocco (ordine/gruppo);
+      mai a metà transazione bulk (lì si preferisce far completare il blocco in
+      atto e stoppare prima del successivo).
+- [ ] **Politica blocco anomalie**: oggi QUALUNQUE anomalia != 0 interrompe la
+      fatturazione (comportamento VB). Valutare: bloccare solo su anomalie
+      critiche (duplicati contratto/evento) e di proseguire su "mancanti"
+      (contratto/evento non agganciato), segnalandoli.
+- **Case VPN**: VPN full-tunnel di sistema rallenta TUTTE le connessioni, anche
+  verso SQL raggiungibile in LAN. Opzioni pratiche: spegnerla per le run,
+  configurare split-tunneling per IP del server SQL, oppure lavorare via RDP
+  su una macchina in sede (il traffico SQL resta in LAN).
