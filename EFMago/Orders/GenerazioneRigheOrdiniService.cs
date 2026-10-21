@@ -25,7 +25,7 @@ namespace FatturazioneContratti.Orders
         /// </summary>
         private readonly DateTime _now = DateTime.Now;
 
-        public bool GeneraRigheOrdine(GeneraRigheOrdineOptions options)
+        public bool GeneraRigheOrdine(GeneraRigheOrdineOptions options, CancellationToken token = default)
         {
             FiltriOrdini filtri = options.Filtri;
             int dimensioneBlocco = options.DimensioneBlocco;
@@ -34,7 +34,7 @@ namespace FatturazioneContratti.Orders
             ProgressCallbacks? progress1 = options.ProgressBlocchi;
             ProgressCallbacks? progress2 = options.ProgressOrdini;
 
-            var stato = new StatoElaborazioneOrdini(filtri, _loginId, _now);
+            var stato = new StatoElaborazioneOrdini(filtri, _loginId, _now, token);
 
             try
             {
@@ -84,6 +84,9 @@ namespace FatturazioneContratti.Orders
                 {
                     for (int i = 0; i < totOrdini; i += dimensioneBlocco)
                     {
+                        // Confine di blocco: qui si può interrompere senza lasciare lavoro a metà.
+                        token.ThrowIfCancellationRequested();
+
                         int blockSize = Math.Min(dimensioneBlocco, totOrdini - i);
                         progress2?.Init(0, Math.Max(1, blockSize)); // barra piccola: progresso dentro il blocco
 
@@ -102,6 +105,8 @@ namespace FatturazioneContratti.Orders
 
                         foreach (var o in allOrdersChunk)
                         {
+                            // Confine ordine: nessuna transazione aperta in questa fase.
+                            token.ThrowIfCancellationRequested();
                             progress2?.Advance(); // avanza la piccola per ogni ordine
                             yield return o;
                         }
@@ -130,7 +135,8 @@ namespace FatturazioneContratti.Orders
                     stato.UpdateAllordCliAttivita,
                     stato.UpdateAllordCliContratto,
                     stato.BulkMessage,
-                    logMessage);
+                    logMessage,
+                    token);
 
                 // Il rollback bulk è già riportato da BulkPersistenceHelper (UI + file):
                 // qui si segnala solo l'esito, senza raddoppiare i messaggi.
@@ -140,6 +146,11 @@ namespace FatturazioneContratti.Orders
                 // riassunto degli errori viene scaricato dal finally e l'esito sarà false.
                 if (stato.Errori.Length == 0)
                     LogDiagnostica.Informativo(logMessage, "[COMPLETATO] Elaborazione a blocchi di ID conclusa con successo.");
+            }
+            catch (OperationCanceledException)
+            {
+                // Interruzione utente: risale a FLogin (esito "interrotto", non errore critico).
+                throw;
             }
             catch (Exception ex)
             {
@@ -166,6 +177,9 @@ namespace FatturazioneContratti.Orders
         /// </summary>
         private void ElaboraOrdine(StatoElaborazioneOrdini st, MaSaleOrd o)
         {
+            // Confine ordine: interruzione mai a metà di un'elaborazione.
+            st.Token.ThrowIfCancellationRequested();
+
             st.Debugging.AppendLine($"Ordine: {o.InternalOrdNo}");
 
             var so = new StatoOrdine(
@@ -199,6 +213,9 @@ namespace FatturazioneContratti.Orders
         /// </summary>
         private void ElaboraContratto(StatoElaborazioneOrdini st, StatoOrdine so, MaSaleOrd o, AllordCliContratto c)
         {
+            // Confine contratto: stessa granularità dell'interruzione.
+            st.Token.ThrowIfCancellationRequested();
+
             var filtri = st.Filtri;
             var cOrd = so.COrd;
 
@@ -939,19 +956,20 @@ namespace FatturazioneContratti.Orders
             List<AllordCliAttivita> attivita,
             List<AllordCliContratto> contratti,
             StringBuilder bulkMessage,
-            Action<string, LogTarget>? logMessage)
+            Action<string, LogTarget>? logMessage,
+            CancellationToken token = default)
         {
             if (totNuove == 0 && totAggiornate == 0) return true;
 
             bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_context, () =>
             {
-                BulkPersistenceHelper.BulkExecuteList(_context, ordini, "MaSaleOrd", BulkOperation.Update, "teste ordini", bulkMessage);
-                BulkPersistenceHelper.BulkExecuteList(_context, details, "MaSaleOrdDetails", BulkOperation.Insert, "righe ordini", bulkMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, ordini, "MaSaleOrd", BulkOperation.Update, "teste ordini", bulkMessage, token);
+                BulkPersistenceHelper.BulkExecuteList(_context, details, "MaSaleOrdDetails", BulkOperation.Insert, "righe ordini", bulkMessage, token);
                 //BulkPersistenceHelper.BulkExecuteList(_context, summaries, "MaSaleOrdSummary", BulkOperation.InsertOrUpdate, "totali ordini", bulkMessage);
-                BulkPersistenceHelper.BulkExecuteList(_context, accessorie, "AllordCliAcc", BulkOperation.Update, "dati accessori ordini", bulkMessage);
-                BulkPersistenceHelper.BulkExecuteList(_context, attivita, "AllordCliAttivita", BulkOperation.Update, "righe attività", bulkMessage);
-                BulkPersistenceHelper.BulkExecuteList(_context, contratti, "AllordCliContratto", BulkOperation.Update, "righe contratto", bulkMessage);
-            }, logMessage);
+                BulkPersistenceHelper.BulkExecuteList(_context, accessorie, "AllordCliAcc", BulkOperation.Update, "dati accessori ordini", bulkMessage, token);
+                BulkPersistenceHelper.BulkExecuteList(_context, attivita, "AllordCliAttivita", BulkOperation.Update, "righe attività", bulkMessage, token);
+                BulkPersistenceHelper.BulkExecuteList(_context, contratti, "AllordCliContratto", BulkOperation.Update, "righe contratto", bulkMessage, token);
+            }, logMessage, token);
 
             if (esito)
             {
@@ -971,11 +989,14 @@ namespace FatturazioneContratti.Orders
         /// di log, default ERP e prototipo riga. Consente di tenere l'elaborazione di singolo
         /// ordine/contratto in metodi dedicati senza lunghe liste di parametri.
         /// </summary>
-        private sealed class StatoElaborazioneOrdini(FiltriOrdini filtri, int loginId, DateTime now)
+        private sealed class StatoElaborazioneOrdini(FiltriOrdini filtri, int loginId, DateTime now, CancellationToken token)
         {
             public FiltriOrdini Filtri { get; } = filtri;
             public int LoginId { get; } = loginId;
             public DateTime Now { get; } = now;
+
+            /// <summary>Token di interruzione utente, controllato ai confini di ordine/contratto.</summary>
+            public CancellationToken Token { get; } = token;
 
             public MaSaleOrdDetails PrototipoRiga { get; private set; }
             public DefaultVenditeIva Default { get; private set; }

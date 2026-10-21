@@ -25,12 +25,18 @@ namespace FatturazioneContratti.Common
         /// In caso di errore il reporting è affidato a <see cref="LogDiagnostica"/>:
         /// messaggio + rollback su UI e file, stack trace sul file. L'errore NON viene
         /// duplicato negli accumulatori del chiamante, che scarica solo gli errori di business.
+        /// Se <paramref name="token"/> viene annullato la transazione è rollbackata e
+        /// <see cref="OperationCanceledException"/> risale al chiamante (interruzione utente).
         /// </summary>
         public static bool ExecuteInBulkTransaction(
             DbContext context,
             Action executeActions,
-            Action<string, LogTarget>? logMessage = null)
+            Action<string, LogTarget>? logMessage = null,
+            CancellationToken token = default)
         {
+            // Richiesta già arrivata prima di aprire la transazione: nessun accesso al DB.
+            token.ThrowIfCancellationRequested();
+
             using var bulkTrans = context.Database.BeginTransaction();
             bool traceOnExecuted = false;
 
@@ -39,10 +45,27 @@ namespace FatturazioneContratti.Common
                 context.Database.ExecuteSqlRaw("DBCC TRACEON(610)");
                 traceOnExecuted = true;
 
+                // Check a transazione aperta: se nel frattempo è arrivata l'interruzione
+                // si rollbacka subito senza eseguire alcuna bulk.
+                token.ThrowIfCancellationRequested();
+
                 executeActions();
+
+                // Ultimo check prima del commit: interruzione arrivata durante le bulk.
+                token.ThrowIfCancellationRequested();
 
                 bulkTrans.Commit();
                 return true;
+            }
+            catch (OperationCanceledException)
+            {
+                // Interruzione utente: rollback esplicito e propagazione (il chiamante
+                // la tratta come "interrotto", non come errore critico).
+                try { bulkTrans.Rollback(); }
+                catch (Exception rbEx) { Debug.WriteLine($"[Rollback Fallito]: {rbEx.Message}"); }
+
+                LogDiagnostica.Avviso(logMessage, "Elaborazione interrotta: rollback della transazione bulk eseguito.");
+                throw;
             }
             catch (Exception ex)
             {
@@ -87,9 +110,14 @@ namespace FatturazioneContratti.Common
             string tableName,
             BulkOperation operation,
             string stepDescription = "",
-            StringBuilder logBuilder = null) where T : class
+            StringBuilder logBuilder = null,
+            CancellationToken token = default) where T : class
         {
             if (entityList == null || entityList.Count == 0) return;
+
+            // Check puntuale prima di ogni operazione bulk: se il token è annullato si
+            // lancia OperationCanceledException e ExecuteInBulkTransaction fa rollback.
+            token.ThrowIfCancellationRequested();
 
             int count = entityList.Count;                       
 

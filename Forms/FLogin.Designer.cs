@@ -43,6 +43,7 @@
             btnPulisciStato = new Button();
             subProgressBar = new ProgressBar();
             lnkApriLog = new LinkLabel();
+            btnInterrompi = new Button();
             menuStripPrincipal.SuspendLayout();
             grpAzioni.SuspendLayout();
             SuspendLayout();
@@ -280,11 +281,23 @@
             lnkApriLog.Visible = false;
             lnkApriLog.LinkClicked += LnkApriLog_LinkClicked;
             // 
+            // btnInterrompi
+            // 
+            btnInterrompi.Enabled = false;
+            btnInterrompi.Location = new Point(200, 433);
+            btnInterrompi.Name = "btnInterrompi";
+            btnInterrompi.Size = new Size(120, 25);
+            btnInterrompi.TabIndex = 11;
+            btnInterrompi.Text = "Interrompi";
+            btnInterrompi.UseVisualStyleBackColor = true;
+            btnInterrompi.Click += BtnInterrompi_Click;
+            // 
             // FLogin
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(681, 520);
+            Controls.Add(btnInterrompi);
             Controls.Add(subProgressBar);
             Controls.Add(lnkApriLog);
             Controls.Add(btnPulisciStato);
@@ -338,5 +351,6 @@
         private System.Windows.Forms.Button btnPulisciStato;
         private ProgressBar subProgressBar;
         private System.Windows.Forms.LinkLabel lnkApriLog;
+        private System.Windows.Forms.Button btnInterrompi;
     }
 }

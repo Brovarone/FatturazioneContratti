@@ -169,7 +169,7 @@ namespace FatturazioneContratti.Forms
 
             var filtri = formFiltri.OttieniFiltri();
 
-            EseguiOperazione("Generazione Canoni da Ordini", () =>
+            EseguiOperazione("Generazione Canoni da Ordini", (CancellationToken token) =>
             {
                 using var ctx = SqlTools.CreateContext();
                 var service = new GenerazioneRigheOrdiniService(ctx, AppConfig.LoginId);
@@ -179,7 +179,7 @@ namespace FatturazioneContratti.Forms
                     LogMessage: Log,
                     UpdateStatus: AggiornaStato,
                     ProgressBlocchi: CreaProgress(_progressMain),
-                    ProgressOrdini: CreaProgress(_progressSub)));
+                    ProgressOrdini: CreaProgress(_progressSub)), token);
             });
         }
 
@@ -196,7 +196,7 @@ namespace FatturazioneContratti.Forms
                 return;
             }
 
-            EseguiOperazione("Adeguamento ISTAT", () =>
+            EseguiOperazione("Adeguamento ISTAT", (CancellationToken token) =>
             {
                 using var ctx = SqlTools.CreateContext();
                 var service = new GenerazioneRigheOrdiniService(ctx, AppConfig.LoginId);
@@ -206,7 +206,8 @@ namespace FatturazioneContratti.Forms
                     logMessage: Log,
                     updateStatus: AggiornaStato,
                     progress1: CreaProgress(_progressMain),
-                    progress2: CreaProgress(_progressSub));
+                    progress2: CreaProgress(_progressSub),
+                    token: token);
             });
         }
 
@@ -218,7 +219,7 @@ namespace FatturazioneContratti.Forms
 
             var filtri = formFiltri.OttieniFiltri();
 
-            EseguiOperazione("Consuntivazione Flusso Integra", () =>
+            EseguiOperazione("Consuntivazione Flusso Integra", (CancellationToken token) =>
             {
                 using var ctx = SqlTools.CreateContext();
                 var service = new ConsuntivoService(ctx, AppConfig.LoginId);
@@ -234,7 +235,8 @@ namespace FatturazioneContratti.Forms
                         Log,
                         AggiornaStato,
                         CreaProgress(_progressMain),
-                        CreaProgress(_progressSub)
+                        CreaProgress(_progressSub),
+                        token
                         );
 
                     if (!checkOk)
@@ -260,7 +262,8 @@ namespace FatturazioneContratti.Forms
                         Log,
                         AggiornaStato,
                         CreaProgress(_progressMain),
-                        CreaProgress(_progressSub));
+                        CreaProgress(_progressSub),
+                        token);
                 }
 
                 Log("--- Step 2: Saltato (Solo Controllo selezionato) ---");
@@ -276,7 +279,7 @@ namespace FatturazioneContratti.Forms
 
             var filtri = formFiltri.OttieniFiltri();
 
-            EseguiOperazione("Allineamento Canoni Fatture", () =>
+            EseguiOperazione("Allineamento Canoni Fatture", (CancellationToken token) =>
             {
                 using var conn = SqlTools.OpenDirectConnection();
                 using var trans = conn.BeginTransaction();
@@ -286,7 +289,8 @@ namespace FatturazioneContratti.Forms
                     trans,
                     filtri,
                     loginId: AppConfig.LoginId,
-                    logMessage: Log);
+                    logMessage: Log,
+                    token: token);
 
                 if (ok) trans.Commit();
                 else trans.Rollback();
@@ -305,9 +309,13 @@ namespace FatturazioneContratti.Forms
             () => barra?.Advance(),
             () => barra?.Finish());
 
-        private void EseguiOperazione(string nomeProcesso, Func<bool> azione)
+        private void EseguiOperazione(string nomeProcesso, Func<CancellationToken, bool> azione)
         {
             if (_inElaborazione) return;   // protezione extra contro doppi avvii
+
+            // CTS dedicata alla run corrente: il pulsante Interrompi annulla questa.
+            var cts = new CancellationTokenSource();
+            _ctsCurrent = cts;
 
             // UI iniziale
             SetUiBusy(true);
@@ -328,7 +336,7 @@ namespace FatturazioneContratti.Forms
                 bool esito = false;
                 try
                 {
-                    esito = azione();
+                    esito = azione(cts.Token);
 
                     // Posta il risultato sul thread UI in modo sicuro
                     PostToUi(() =>
@@ -348,6 +356,16 @@ namespace FatturazioneContratti.Forms
                         lnkApriLog.Visible = true;
                     });
                 }
+                catch (OperationCanceledException)
+                {
+                    // Interruzione richiesta dall'utente: esito "interrotto", non errore critico.
+                    PostToUi(() =>
+                    {
+                        LogDiagnostica.Avviso(Log, $"=== INTERROTTO DALL'UTENTE: {nomeProcesso} ===");
+                        AggiornaStato($"Interrotto: {nomeProcesso}", Color.DarkOrange);
+                        lnkApriLog.Visible = true;
+                    });
+                }
                 catch (Exception ex)
                 {
                     // Marshal dell'errore su UI in modo sicuro
@@ -361,10 +379,30 @@ namespace FatturazioneContratti.Forms
                 }
                 finally
                 {
-                    // Ripristina UI sul thread UI
-                    PostToUi(() => SetUiBusy(false));   // gestisce già il marshaling
+                    // Ripristina UI sul thread UI e rilascia la CTS della run
+                    PostToUi(() =>
+                    {
+                        if (ReferenceEquals(_ctsCurrent, cts)) _ctsCurrent = null;
+                        cts.Dispose();
+                        SetUiBusy(false);   // gestisce già il marshaling
+                    });
                 }
             });
+        }
+
+        /// <summary>
+        /// Richiesta di interruzione della run corrente: annulla il token e lascia che i
+        /// servizi arrivino al confine di blocco, eseguendo l'eventuale rollback.
+        /// </summary>
+        private void BtnInterrompi_Click(object sender, EventArgs e)
+        {
+            var cts = _ctsCurrent;
+            if (cts == null || cts.IsCancellationRequested) return;
+
+            cts.Cancel();
+            btnInterrompi.Enabled = false;   // una sola richiesta per run
+            LogDiagnostica.Avviso(Log, "Richiesta di interruzione: attesa completamento/rollback...");
+            AggiornaStato("Interruzione richiesta: attesa completamento...", Color.DarkOrange);
         }
 
         /// <summary>
@@ -543,6 +581,9 @@ namespace FatturazioneContratti.Forms
         private Control[] _controlliDaBloccare;
         private volatile bool _inElaborazione;
 
+        /// <summary>CTS della run in corso: creata in EseguiOperazione, annullata da "Interrompi".</summary>
+        private CancellationTokenSource? _ctsCurrent;
+
         private void InizializzaControlliBloccabili()
         {
             _controlliDaBloccare = new Control[]
@@ -593,6 +634,9 @@ namespace FatturazioneContratti.Forms
 
             foreach (var c in _controlliDaBloccare)
                 c.Enabled = !busy;
+
+            // "Interrompi" è l'unico pulsante attivo durante l'elaborazione.
+            btnInterrompi.Enabled = busy;
 
             menuStripPrincipal.Enabled = !busy;
 

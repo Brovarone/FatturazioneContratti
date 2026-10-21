@@ -32,7 +32,8 @@ namespace FatturazioneContratti.Orders
             Action<string, LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
-            ProgressCallbacks? progress2 = null)
+            ProgressCallbacks? progress2 = null,
+            CancellationToken token = default)
         {
             if (filtri.PercIstat == 0)
             {
@@ -107,6 +108,9 @@ namespace FatturazioneContratti.Orders
                 {
                     for (int i = 0; i < totOrdini; i += dimensioneBlocco)
                     {
+                        // Confine di blocco: qui si può interrompere senza lavoro a metà.
+                        token.ThrowIfCancellationRequested();
+
                         int blockSize = Math.Min(dimensioneBlocco, totOrdini - i);
                         progress2?.Init(0, Math.Max(1, blockSize));
 
@@ -121,6 +125,8 @@ namespace FatturazioneContratti.Orders
 
                         foreach (var o in allOrdersChunk)
                         {
+                            // Confine ordine: nessuna transazione aperta in questa fase.
+                            token.ThrowIfCancellationRequested();
                             progress2?.Advance(); // avanza la piccola per ogni ordine
                             yield return o;
                         }
@@ -136,6 +142,9 @@ namespace FatturazioneContratti.Orders
 
                 foreach (var o in CaricaOrdiniPerBlocco())
                 {
+                    // Confine ordine (granularità dell'interruzione).
+                    token.ThrowIfCancellationRequested();
+
                     debugging.AppendLine($"Ordine: {o.InternalOrdNo}");
 
                     bool isNewRowsAtt = false;
@@ -157,6 +166,9 @@ namespace FatturazioneContratti.Orders
 
                     foreach (var c in o.ALLordCliContratto)
                     {
+                        // Confine contratto: nessuna interruzione a metà riga.
+                        token.ThrowIfCancellationRequested();
+
                         string sEx = $"{c.Line}) {c.TipoRigaServizio} {c.Servizio}";
 
                         // Controllo Esclusioni
@@ -350,9 +362,9 @@ namespace FatturazioneContratti.Orders
 
                     bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_context, () =>
                     {
-                        BulkPersistenceHelper.BulkExecuteList(_context, efAllordCliAttivita, "ALLOrdCliAttivita", BulkOperation.InsertOrUpdate, "righe attività", bulkMessage);
-                        BulkPersistenceHelper.BulkExecuteList(_context, efAllordCliContratto, "ALLOrdCliContratto", BulkOperation.Update, "righe contratto", bulkMessage);
-                    }, logMessage);
+                        BulkPersistenceHelper.BulkExecuteList(_context, efAllordCliAttivita, "ALLOrdCliAttivita", BulkOperation.InsertOrUpdate, "righe attività", bulkMessage, token);
+                        BulkPersistenceHelper.BulkExecuteList(_context, efAllordCliContratto, "ALLOrdCliContratto", BulkOperation.Update, "righe contratto", bulkMessage, token);
+                    }, logMessage, token);
 
                     if (esito)
                     {
@@ -365,6 +377,11 @@ namespace FatturazioneContratti.Orders
                         return false;
                     }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                // Interruzione utente: risale a FLogin (esito "interrotto").
+                throw;
             }
             catch (Exception ex)
             {

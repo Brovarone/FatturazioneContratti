@@ -123,7 +123,8 @@ namespace FatturazioneContratti.Invoicing
             Action<string, LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
-            ProgressCallbacks? progress2 = null)
+            ProgressCallbacks? progress2 = null,
+            CancellationToken token = default)
         {
             var fatalContrattoErrorList = new List<string>();
             var fatalEventoErrorList = new List<string>();
@@ -209,6 +210,9 @@ namespace FatturazioneContratti.Invoicing
 
                 foreach (var i in allInterventi)
                 {
+                    // Confine intervento: l'interruzione si verifica solo qui, mai a metà riga.
+                    token.ThrowIfCancellationRequested();
+
                     // Nuovo blocco: chiudo il precedente e riavvio la barra piccola
                     if (indice % DimensioneBlocco == 0)
                     {
@@ -341,6 +345,11 @@ namespace FatturazioneContratti.Invoicing
 
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                // Interruzione utente: risale a FLogin come esito "interrotto".
+                throw;
+            }
             catch (Exception ex)
             {
                 LogDiagnostica.Errore(logMessage, ex);
@@ -368,7 +377,8 @@ namespace FatturazioneContratti.Invoicing
             Action<string, LogTarget> logMessage = null,
             Action<string> updateStatus = null,
             ProgressCallbacks? progress1 = null,
-            ProgressCallbacks? progress2 = null)
+            ProgressCallbacks? progress2 = null,
+            CancellationToken token = default)
         {
             var bulkMessage = new StringBuilder();
             var debugging = new StringBuilder();
@@ -538,9 +548,15 @@ namespace FatturazioneContratti.Invoicing
 
                 foreach (var o in ordiniList)
                 {
+                    // Confine ordine: l'interruzione si verifica qui, mai a metà fattura.
+                    token.ThrowIfCancellationRequested();
+
                     // Nuovo blocco: chiudo il precedente e riavvio la barra piccola
                     if (indice % DimensioneBlocco == 0)
                     {
+                        // Confine di chunk (dove oggi si committa): nessun lavoro a metà blocco.
+                        token.ThrowIfCancellationRequested();
+
                         if (indice > 0)
                         {
                             progress2?.Finish();
@@ -870,17 +886,17 @@ namespace FatturazioneContratti.Invoicing
                 {
                     bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_ordiniCntx, () =>
                     {
-                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDoc, "MaSaleDoc", BulkOperation.Insert, "fatture", bulkMessage);
-                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDocDetails, "MaSaleDocDetails", BulkOperation.Insert, "dettagli fatture", bulkMessage);
-                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDocSummary, "MaSaleDocSummary", BulkOperation.Insert, "summary fatture", bulkMessage);
-                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaCrossReferences, "MaCrossReferences", BulkOperation.Insert, "cross ref", bulkMessage);
-                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaCrossReferencesNotes, "MaCrossReferencesNotes", BulkOperation.Insert, "cross ref notes", bulkMessage);
-                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaEiItdocAdditionalData, "MaEiItdocAdditionalData", BulkOperation.Insert, "dati aggiuntivi FE", bulkMessage);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDoc, "MaSaleDoc", BulkOperation.Insert, "fatture", bulkMessage, token);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDocDetails, "MaSaleDocDetails", BulkOperation.Insert, "dettagli fatture", bulkMessage, token);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDocSummary, "MaSaleDocSummary", BulkOperation.Insert, "summary fatture", bulkMessage, token);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaCrossReferences, "MaCrossReferences", BulkOperation.Insert, "cross ref", bulkMessage, token);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaCrossReferencesNotes, "MaCrossReferencesNotes", BulkOperation.Insert, "cross ref notes", bulkMessage, token);
+                        BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaEiItdocAdditionalData, "MaEiItdocAdditionalData", BulkOperation.Insert, "dati aggiuntivi FE", bulkMessage, token);
 
                         // Aggiornamento contatore ID
                         idNumbers.LastId = saleDocId;
                         _ordiniCntx.SaveChanges();
-                    }, logMessage);
+                    }, logMessage, token);
 
                     if (!esito) return false;
 
@@ -889,6 +905,12 @@ namespace FatturazioneContratti.Invoicing
                 }
 
                 return true;
+            }
+            catch (OperationCanceledException)
+            {
+                // Interruzione utente: risale a FLogin (esito "interrotto"); il finally
+                // scarica comunque statistiche e tracciato.
+                throw;
             }
             catch (Exception ex)
             {

@@ -19,7 +19,8 @@ namespace FatturazioneContratti.Invoicing
             SqlTransaction transaction,
             FiltriAllineamentoFatture filtri,
             int loginId,
-            Action<string, LogTarget>? logMessage = null)
+            Action<string, LogTarget>? logMessage = null,
+            CancellationToken token = default)
         {
             // I filtri della run vengono registrati su UI/file come negli altri workflow.
             LogDiagnostica.LogFiltri(logMessage, filtri);
@@ -63,11 +64,20 @@ namespace FatturazioneContratti.Invoicing
                 cmd.Parameters.Add("@DataMod", SqlDbType.VarChar, 8).Value = now.ToString("yyyyMMdd");
                 cmd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
 
+                // Interruzione richiesta prima della UPDATE: si lancia OperationCanceledException
+                // e la transazione del chiamante viene rollbackata dal dispose.
+                token.ThrowIfCancellationRequested();
+
                 int irows = cmd.ExecuteNonQuery();
                 LogDiagnostica.Informativo(logMessage, irows <= 0
                     ? "Nessun documento di vendita da aggiornare"
                     : $"Adeguate {irows} righe.");
                 return true;
+            }
+            catch (OperationCanceledException)
+            {
+                // Interruzione utente: risale al chiamante, che rollbacka la transazione.
+                throw;
             }
             catch (Exception ex)
             {
