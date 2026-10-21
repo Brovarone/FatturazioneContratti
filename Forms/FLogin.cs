@@ -95,12 +95,14 @@ namespace FatturazioneContratti.Forms
             try { this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
             catch { }
 
-            // Log colorato: OwnerDraw per colorare la riga in base al tag emesso da
-            // LogDiagnostica ([ERRORE]/[AVVISO]). Il ListBox resta identico come uso:
-            // Items.Add / TopIndex / Clear non cambiano.
-            lstStato.DrawMode = DrawMode.OwnerDrawFixed;
-            lstStato.ItemHeight = lstStato.Font.Height + 3;
+            // Log "colorato" e raggomitolato: OwnerDrawVariable per andare a capo sulle
+            // righe lunghe (MeasureItem calcola l'altezza in base al testo) e per
+            // colorare la riga in base al tag emesso da LogDiagnostica ([ERRORE]/[AVVISO]).
+            // Il ListBox resta identico come uso: Items.Add / TopIndex / Clear non cambiano.
+            lstStato.DrawMode = DrawMode.OwnerDrawVariable;
+            lstStato.MeasureItem += LstStato_MeasureItem;
             lstStato.DrawItem += LstStato_DrawItem;
+            lstStato.SizeChanged += LstStato_SizeChanged;
         }
 
         private void FLogin_Load(object sender, EventArgs e)
@@ -493,31 +495,102 @@ namespace FatturazioneContratti.Forms
         private void BtnPulisciStato_Click(object sender, EventArgs e) => lstStato.Items.Clear();
 
         /// <summary>
-        /// Disegno personalizzato del log a video: colora la riga in base al tag presente
-        /// nel testo ([ERRORE] = rosso mattone, [AVVISO] = arancio), gli altri restano
-        /// normali. La selezione continua a funzionare perché DrawBackground disegna
-        /// l'evidenziazione standard e il testo selezionato usa HighlightText.
+        /// Misura l'altezza della riga di log: il testo viene spezzato a capo sulla
+        /// larghezza utile del ListBox (meno la eventuale scrollbar verticale) e la
+        /// riga cresce di conseguenza. Righe corte restano a una sola altezza.
+        /// </summary>
+        private void LstStato_MeasureItem(object? sender, MeasureItemEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= lstStato.Items.Count) return;
+
+            string testo = lstStato.Items[e.Index]?.ToString() ?? string.Empty;
+            int larghezzaUtile = Math.Max(24, lstStato.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 8);
+
+            var misura = TextRenderer.MeasureText(testo, lstStato.Font,
+                new Size(larghezzaUtile, int.MaxValue),
+                TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left);
+
+            e.ItemHeight = Math.Max(lstStato.Font.Height + 2, misura.Height + 2);
+        }
+
+        /// <summary>
+        /// Disegno personalizzato del log a video. Colori ad alto contrasto, con tinta
+        /// di sfondo oltre al colore del testo:
+        /// - [ERRORE]  → sfondo rosso chiaro, testo rosso scuro
+        /// - [AVVISO]  → sfondo ambra chiaro, testo ambra scuro
+        /// - altre righe → sfondo del controllo, testo normale
+        /// Con la selezione si torna all'evidenziazione standard di Windows (HighlightText),
+        /// così il testo resta sempre leggibile. Il testo va a capo (WordBreak).
         /// </summary>
         private void LstStato_DrawItem(object? sender, DrawItemEventArgs e)
         {
             if (e.Index < 0 || e.Index >= lstStato.Items.Count) return;
 
-            e.DrawBackground();
-
             string testo = lstStato.Items[e.Index]?.ToString() ?? string.Empty;
-            Color colore = testo.IndexOf("[ERRORE]", StringComparison.OrdinalIgnoreCase) >= 0
-                ? Color.Firebrick
-                : testo.IndexOf("[AVVISO]", StringComparison.OrdinalIgnoreCase) >= 0
-                    ? Color.DarkOrange
-                    : SystemColors.WindowText;
 
-            // Selezionato: il testo rispetta il tema (HighlightText) così resta leggibile.
-            if (e.State.HasFlag(DrawItemState.Selected)) colore = SystemColors.HighlightText;
+            bool errore = testo.IndexOf("[ERRORE]", StringComparison.OrdinalIgnoreCase) >= 0;
+            bool avviso = !errore && testo.IndexOf("[AVVISO]", StringComparison.OrdinalIgnoreCase) >= 0;
 
-            TextRenderer.DrawText(e.Graphics, testo, e.Font, e.Bounds, colore,
-                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            Color sfondo;
+            Color colore;
+            if (errore)
+            {
+                sfondo = Color.FromArgb(253, 231, 231);
+                colore = Color.FromArgb(139, 0, 0);
+            }
+            else if (avviso)
+            {
+                sfondo = Color.FromArgb(255, 244, 206);
+                colore = Color.FromArgb(122, 74, 0);
+            }
+            else
+            {
+                sfondo = lstStato.BackColor;
+                colore = SystemColors.WindowText;
+            }
 
-            e.DrawFocusRectangle();
+            if (e.State.HasFlag(DrawItemState.Selected))
+            {
+                // Selezione: evidenziazione standard, testo del tema.
+                e.DrawBackground();
+                colore = SystemColors.HighlightText;
+            }
+            else
+            {
+                using var pennello = new SolidBrush(sfondo);
+                e.Graphics.FillRectangle(pennello, e.Bounds);
+            }
+
+            var area = new Rectangle(e.Bounds.X + 2, e.Bounds.Y + 1,
+                Math.Max(1, e.Bounds.Width - 4), Math.Max(1, e.Bounds.Height - 2));
+
+            TextRenderer.DrawText(e.Graphics, testo, e.Font, area, colore,
+                TextFormatFlags.Left | TextFormatFlags.Top
+                | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+
+            if (e.State.HasFlag(DrawItemState.Focus)) e.DrawFocusRectangle();
+        }
+
+        /// <summary>
+        /// Il ListBox in OwnerDrawVariable memorizza le altezze già misurate: quando cambia
+        /// la larghezza (finestra ridimensionata) vanno ricalcolate, altrimenti il testo
+        /// wrappato resta tagliato. Il toggle rapido di DrawMode dentro BeginUpdate/EndUpdate
+        /// svuota la cache senza sfarfallio e senza perdere gli item.
+        /// </summary>
+        private void LstStato_SizeChanged(object? sender, EventArgs e)
+        {
+            if (lstStato.Items.Count == 0) return;
+
+            lstStato.BeginUpdate();
+            try
+            {
+                lstStato.DrawMode = DrawMode.Normal;
+                lstStato.DrawMode = DrawMode.OwnerDrawVariable;
+            }
+            finally
+            {
+                lstStato.EndUpdate();
+            }
         }
 
         private void LnkApriLog_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
