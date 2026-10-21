@@ -7,6 +7,7 @@ using System;
 using System.Data;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows.Forms;
 
@@ -103,6 +104,14 @@ namespace FatturazioneContratti.Forms
             lstStato.MeasureItem += LstStato_MeasureItem;
             lstStato.DrawItem += LstStato_DrawItem;
             lstStato.SizeChanged += LstStato_SizeChanged;
+
+            // Ricalcolo altezze del log con debounce: al resize non si può ricreare
+            // l'handle del ListBox (crash Win32Exception) — vedi LstStato_SizeChanged.
+            _riminutaRigheLog.Tick += (_, _) =>
+            {
+                _riminutaRigheLog.Stop();
+                RimisuraAltezzeRigheLog();
+            };
         }
 
         private void FLogin_Load(object sender, EventArgs e)
@@ -502,15 +511,24 @@ namespace FatturazioneContratti.Forms
         private void LstStato_MeasureItem(object? sender, MeasureItemEventArgs e)
         {
             if (e.Index < 0 || e.Index >= lstStato.Items.Count) return;
+            e.ItemHeight = CalcolaAltezzaRigaLog(lstStato.Items[e.Index]?.ToString() ?? string.Empty);
+        }
 
-            string testo = lstStato.Items[e.Index]?.ToString() ?? string.Empty;
-            int larghezzaUtile = Math.Max(24, lstStato.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 8);
+        /// <summary>Larghezza utile per il testo: totale meno l'eventuale scrollbar verticale.</summary>
+        private int LarghezzaUtileRigheLog()
+            => Math.Max(24, lstStato.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 8);
 
+        /// <summary>
+        /// Altezza necessaria a mostrare la riga di log andando a capo (WordBreak):
+        /// 1 riga per i messaggi corti, più righe per quelli lunghi. Almeno una riga.
+        /// </summary>
+        private int CalcolaAltezzaRigaLog(string testo)
+        {
             var misura = TextRenderer.MeasureText(testo, lstStato.Font,
-                new Size(larghezzaUtile, int.MaxValue),
+                new Size(LarghezzaUtileRigheLog(), int.MaxValue),
                 TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.Left);
 
-            e.ItemHeight = Math.Max(lstStato.Font.Height + 2, misura.Height + 2);
+            return Math.Max(lstStato.Font.Height + 2, misura.Height + 2);
         }
 
         /// <summary>
@@ -573,25 +591,44 @@ namespace FatturazioneContratti.Forms
 
         /// <summary>
         /// Il ListBox in OwnerDrawVariable memorizza le altezze già misurate: quando cambia
-        /// la larghezza (finestra ridimensionata) vanno ricalcolate, altrimenti il testo
-        /// wrappato resta tagliato. Il toggle rapido di DrawMode dentro BeginUpdate/EndUpdate
-        /// svuota la cache senza sfarfallio e senza perdere gli item.
+        /// la larghezza vanno ricalcolate, altrimenti il testo wrappato resta tagliato.
+        /// NON si cambia DrawMode qui: ricrea l'handle dentro il messaggio di resize e
+        /// fa schiantare con Win32Exception "Errore durante la creazione dell'handle"
+        /// (crash reale del 21/10/2026). Si aggiorna invece l'altezza di ogni item con
+        /// LB_SETITEMHEIGHT, con un debounce per non farlo a ogni pixel trascinato.
         /// </summary>
         private void LstStato_SizeChanged(object? sender, EventArgs e)
         {
-            if (lstStato.Items.Count == 0) return;
-
-            lstStato.BeginUpdate();
-            try
-            {
-                lstStato.DrawMode = DrawMode.Normal;
-                lstStato.DrawMode = DrawMode.OwnerDrawVariable;
-            }
-            finally
-            {
-                lstStato.EndUpdate();
-            }
+            if (!lstStato.IsHandleCreated || lstStato.IsDisposed) return;
+            _riminutaRigheLog.Stop();
+            _riminutaRigheLog.Start();
         }
+
+        /// <summary>
+        /// Ricalcola l'altezza di tutte le righe di log alla larghezza corrente, senza
+        /// ricreare l'handle: LB_SETITEMHEIGHT aggiorna l'altezza del singolo item.
+        /// </summary>
+        private void RimisuraAltezzeRigheLog()
+        {
+            if (!lstStato.IsHandleCreated || lstStato.IsDisposed || lstStato.Items.Count == 0) return;
+
+            var hwnd = lstStato.Handle;
+            for (int i = 0; i < lstStato.Items.Count; i++)
+            {
+                int altezza = CalcolaAltezzaRigaLog(lstStato.Items[i]?.ToString() ?? string.Empty);
+                SendMessage(hwnd, LB_SETITEMHEIGHT, (IntPtr)i, (IntPtr)altezza);
+            }
+            lstStato.Invalidate();
+        }
+
+        /// <summary>Debounce del ricalcolo altezze del log (vedi LstStato_SizeChanged).</summary>
+        private readonly System.Windows.Forms.Timer _riminutaRigheLog = new() { Interval = 150 };
+
+        /// <summary>LB_SETITEMHEIGHT: imposta l'altezza del singolo item in OwnerDrawVariable.</summary>
+        private const int LB_SETITEMHEIGHT = 0x01A0;
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
         private void LnkApriLog_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
