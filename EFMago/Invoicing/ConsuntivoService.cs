@@ -513,9 +513,19 @@ namespace FatturazioneContratti.Invoicing
 
                 int saleDocId = idNumbers.LastId ?? 0;
 
+                // Solo i clienti effettivamente usati dagli ordini della run: su ALLSPA
+                // l'anagrafica cust/supp completa sono migliaia di righe (+ options) e via
+                // VPN la ToList intera era la query morta in timeout a 180s (21/10/2026).
+                // Con il filtro scendono a poche decine di righe: stesso esito, rete ridotta.
+                var codiciClientiNecessari = ordiniList
+                    .Select(o => o.InvoicingCustomer)
+                    .Where(wo => !string.IsNullOrWhiteSpace(wo))
+                    .Distinct()
+                    .ToArray();
+
                 var clienti = _ordiniCntx.MaCustSupp
                     .Include(c => c.MaCustSuppCustomerOptions)
-                    .Where(w => w.CustSuppType == 3211264)
+                    .Where(w => w.CustSuppType == 3211264 && codiciClientiNecessari.Contains(w.CustSupp))
                     .ToList();
 
                 // Buffer righe dell'ordine corrente: l'ID fattura viene assegnato solo quando il
