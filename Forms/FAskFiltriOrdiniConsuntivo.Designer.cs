@@ -222,6 +222,7 @@
             // 
             // GrpAzione
             // 
+            GrpAzione.Controls.Add(ChkProseguiAnomalie);
             GrpAzione.Controls.Add(RadAzioneSoloControllo);
             GrpAzione.Controls.Add(RadAzioneControlloFattura);
             GrpAzione.Controls.Add(RadAzioneSoloFattura);
@@ -340,9 +341,9 @@
             // ChkProseguiAnomalie
             // 
             ChkProseguiAnomalie.AutoSize = true;
-            ChkProseguiAnomalie.Location = new Point(12, 380);
+            ChkProseguiAnomalie.Location = new Point(10, 97);
             ChkProseguiAnomalie.Name = "ChkProseguiAnomalie";
-            ChkProseguiAnomalie.Size = new Size(230, 19);
+            ChkProseguiAnomalie.Size = new Size(220, 19);
             ChkProseguiAnomalie.TabIndex = 7;
             ChkProseguiAnomalie.Text = "Prosegui comunque con le anomalie";
             ChkProseguiAnomalie.UseVisualStyleBackColor = true;
@@ -354,7 +355,6 @@
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = Cancel_Button;
             ClientSize = new Size(394, 493);
-            Controls.Add(ChkProseguiAnomalie);
             Controls.Add(TxtNrOrdine);
             Controls.Add(ChkSingoloOrdine);
             Controls.Add(CmbFiliale);

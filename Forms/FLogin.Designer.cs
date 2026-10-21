@@ -145,7 +145,7 @@
             // informazioniToolStripMenuItem
             // 
             informazioniToolStripMenuItem.Name = "informazioniToolStripMenuItem";
-            informazioniToolStripMenuItem.Size = new Size(232, 22);
+            informazioniToolStripMenuItem.Size = new Size(280, 22);
             informazioniToolStripMenuItem.Text = "&Informazioni su FatturazioneContratti...";
             informazioniToolStripMenuItem.Click += InformazioniToolStripMenuItem_Click;
             // 
@@ -251,7 +251,7 @@
             // 
             // btnPulisciStato
             // 
-            btnPulisciStato.Location = new Point(562, 430);
+            btnPulisciStato.Location = new Point(562, 487);
             btnPulisciStato.Margin = new Padding(4, 3, 4, 3);
             btnPulisciStato.Name = "btnPulisciStato";
             btnPulisciStato.Size = new Size(105, 25);
@@ -284,9 +284,9 @@
             // btnInterrompi
             // 
             btnInterrompi.Enabled = false;
-            btnInterrompi.Location = new Point(200, 433);
+            btnInterrompi.Location = new Point(561, 429);
             btnInterrompi.Name = "btnInterrompi";
-            btnInterrompi.Size = new Size(120, 25);
+            btnInterrompi.Size = new Size(106, 25);
             btnInterrompi.TabIndex = 11;
             btnInterrompi.Text = "Interrompi";
             btnInterrompi.UseVisualStyleBackColor = true;
