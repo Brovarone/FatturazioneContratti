@@ -340,6 +340,22 @@ namespace FatturazioneContratti.Invoicing
                     // appaiono colorate) e sul file come unico evento multi-riga, con il
                     // dettaglio indentato sotto la riga datata.
                     LogDiagnostica.Blocco(logMessage, null, dettaglio.ToString().Split('\n'), LogTarget.Both);
+
+                    // Anomalie solo "non critiche" (contratti mancanti / eventi non associati):
+                    // con il flag "Prosegui comunque" si prosegue, le sezioni di dettaglio
+                    // sono già state emesse sopra come sempre.
+                    bool soloAnomalieNonCritiche = fatalContrattoErrorList.Count == 0
+                                                  && fatalEventoErrorList.Count == 0;
+
+                    if (soloAnomalieNonCritiche && filtri.ProseguiAnomalie)
+                    {
+                        LogDiagnostica.Avviso(logMessage,
+                            "Prosegui comunque attivo: anomalie non critiche " +
+                            $"({contrattoErrorList.Count} contratti mancanti / {eventoErrorList.Count} eventi non agganciati) " +
+                            "segnalate, si prosegue comunque con la fatturazione.");
+                        return true;
+                    }
+
                     return false;
                 }
 

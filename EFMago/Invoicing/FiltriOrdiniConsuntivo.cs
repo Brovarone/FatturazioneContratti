@@ -32,6 +32,12 @@ namespace FatturazioneContratti.Invoicing
         public InterventiFilterMode InterventiFilter { get; set; } = InterventiFilterMode.MeseAnno;
         public ActionMode Azione { get; set; } = ActionMode.ControlloEFattura;
 
+        /// <summary>
+        /// Prosegue anche in presenza di anomalie non critiche (contratti mancanti /
+        /// eventi non associati). Le anomalie critiche bloccano comunque il flusso.
+        /// </summary>
+        public bool ProseguiAnomalie { get; set; }
+
         public StringBuilder LogFiltri { get; set; } = new StringBuilder();
 
         public void CostruisciFiltriLog()
@@ -46,6 +52,7 @@ namespace FatturazioneContratti.Invoicing
             LogFiltri.AppendLine($"Filiale : {(SingolaFiliale ? Filiale : "TUTTI")}");
             LogFiltri.AppendLine($"Ordine : {(SingoloOrdine ? NrOrdine : "TUTTI")}");
             LogFiltri.AppendLine($"Riassegna : {Riassegna}");
+            LogFiltri.AppendLine($"Prosegui anche con anomalie : {ProseguiAnomalie}");
         }
     }
 }

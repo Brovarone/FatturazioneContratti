@@ -43,6 +43,7 @@
             CmbFiliale = new ComboBox();
             ChkSingoloOrdine = new CheckBox();
             TxtNrOrdine = new TextBox();
+            ChkProseguiAnomalie = new CheckBox();
             TableLayoutPanelButtons.SuspendLayout();
             GrpInterventiFilter.SuspendLayout();
             GrpAzione.SuspendLayout();
@@ -336,6 +337,16 @@
             TxtNrOrdine.Size = new Size(96, 23);
             TxtNrOrdine.TabIndex = 6;
             // 
+            // ChkProseguiAnomalie
+            // 
+            ChkProseguiAnomalie.AutoSize = true;
+            ChkProseguiAnomalie.Location = new Point(12, 380);
+            ChkProseguiAnomalie.Name = "ChkProseguiAnomalie";
+            ChkProseguiAnomalie.Size = new Size(230, 19);
+            ChkProseguiAnomalie.TabIndex = 7;
+            ChkProseguiAnomalie.Text = "Prosegui comunque con le anomalie";
+            ChkProseguiAnomalie.UseVisualStyleBackColor = true;
+            // 
             // FAskFiltriOrdiniConsuntivo
             // 
             AcceptButton = OK_Button;
@@ -343,6 +354,7 @@
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = Cancel_Button;
             ClientSize = new Size(394, 493);
+            Controls.Add(ChkProseguiAnomalie);
             Controls.Add(TxtNrOrdine);
             Controls.Add(ChkSingoloOrdine);
             Controls.Add(CmbFiliale);
@@ -396,5 +408,6 @@
         internal ComboBox CmbFiliale;
         internal CheckBox ChkSingoloOrdine;
         internal TextBox TxtNrOrdine;
+        internal CheckBox ChkProseguiAnomalie;
     }
 }

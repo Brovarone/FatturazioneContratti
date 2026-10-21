@@ -63,6 +63,8 @@ namespace FatturazioneContratti.Forms
 
             // Tooltip su Riassegna
             _toolTip.SetToolTip(ChkRiassegna, "ATTENZIONE: sovrascrive i contratti già assegnati agli interventi");
+            _toolTip.SetToolTip(ChkProseguiAnomalie,
+                "Prosegue con la fatturazione anche in presenza di anomalie non critiche (contratti mancanti / eventi non associati)");
 
             loading = false;
             UpdateUiState();
@@ -216,6 +218,10 @@ namespace FatturazioneContratti.Forms
             ChkRiassegna.Enabled = isSoloControllo || isControlloFattura;
             if (isSoloFattura) ChkRiassegna.Checked = false;
 
+            // Vale solo se lo step di controllo viene eseguito.
+            ChkProseguiAnomalie.Enabled = isSoloControllo || isControlloFattura;
+            if (isSoloFattura) ChkProseguiAnomalie.Checked = false;
+
             // --- Gruppo 3: Data Fattura ---
             bool mostraDataFattura = isControlloFattura || isSoloFattura;
             LblDataFattura.Enabled = DtpDataFattura.Enabled = mostraDataFattura;
@@ -256,7 +262,10 @@ namespace FatturazioneContratti.Forms
 
                 // Campi legacy per compatibilità
                 NrMese = (CmbMonth.SelectedIndex + 1).ToString(),
-                Riassegna = ChkRiassegna.Checked
+                Riassegna = ChkRiassegna.Checked,
+
+                // Prosegue anche con anomalie non critiche nel controllo flusso
+                ProseguiAnomalie = ChkProseguiAnomalie.Checked
             };
 
             // Nota: la descrizione dei filtri per il log la costruisce il servizio
