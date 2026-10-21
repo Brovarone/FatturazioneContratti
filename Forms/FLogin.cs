@@ -512,6 +512,28 @@ namespace FatturazioneContratti.Forms
         private int LarghezzaUtileRigheLog()
             => Math.Max(24, lstStato.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 8);
 
+        // --- DIAGNOSTICA TEMPORANEA loop DrawItem (rimuovere dopo) ---------------
+        private int _diagDrawCount;
+        private readonly System.Diagnostics.Stopwatch _diagDrawWatch = System.Diagnostics.Stopwatch.StartNew();
+        private static readonly object _diagLock = new object();
+
+        private void DiagContaDraw()
+        {
+            _diagDrawCount++;
+            if (_diagDrawCount % 100 != 0) return;
+            try
+            {
+                lock (_diagLock)
+                {
+                    File.AppendAllText(
+                        Path.Combine(Path.GetTempPath(), "drawitem-diag.log"),
+                        $"{DateTime.Now:HH:mm:ss.fff} DrawItem x{_diagDrawCount} ({_diagDrawWatch.Elapsed.TotalSeconds:0.0}s){Environment.NewLine}");
+                }
+            }
+            catch { /* solo diagnostica, mai bloccare */ }
+        }
+        // --- FINE DIAGNOSTICA ----------------------------------------------------
+
         /// <summary>
         /// Altezza necessaria a mostrare la riga di log andando a capo (WordBreak):
         /// 1 riga per i messaggi corti, più righe per quelli lunghi. Almeno una riga.
@@ -536,6 +558,9 @@ namespace FatturazioneContratti.Forms
         /// </summary>
         private void LstStato_DrawItem(object? sender, DrawItemEventArgs e)
         {
+            // DIAGNOSTICA TEMPORANEA 21/10/2026: conta i ridisegni su file, per
+            // accertare il sospetto "loop su DrawItem". Rimuovere dopo la diagnosi.
+            DiagContaDraw();
             if (e.Index < 0 || e.Index >= lstStato.Items.Count) return;
 
             string testo = lstStato.Items[e.Index]?.ToString() ?? string.Empty;
