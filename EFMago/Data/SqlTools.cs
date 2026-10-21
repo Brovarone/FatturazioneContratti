@@ -68,6 +68,14 @@ namespace FatturazioneContratti.Data
         }
 
         /// <summary>
+        /// Timeout (secondi) per i comandi verso SQL Server: 10 minuti forzati, perché
+        /// con run eseguite via VPN anche query semplici (es. ToList su MaCustSupp
+        /// del consuntivo) possono superare i 3 minuti del vecchio 180s (caso reale
+        /// del 21/10/2026: il comando è morto a ~183s in pieno periodo VPN).
+        /// </summary>
+        public const int CommandTimeoutSeconds = 600;
+
+        /// <summary>
         /// Crea un'istanza di FattureContext già configurata per il database attualmente attivo.
         /// </summary>
         public static FattureContext CreateContext()
@@ -89,7 +97,7 @@ namespace FatturazioneContratti.Data
             }
 
             var ctx = new FattureContext(optionsBuilder.Options);
-            ctx.Database.SetCommandTimeout(180);
+            ctx.Database.SetCommandTimeout(CommandTimeoutSeconds);
             return ctx;
         }
     }

@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.Text;
 using FatturazioneContratti.Common;
+using FatturazioneContratti.Data;
 using Microsoft.Data.SqlClient;
 
 namespace FatturazioneContratti.Invoicing
@@ -51,6 +52,9 @@ namespace FatturazioneContratti.Invoicing
             try
             {
                 using var cmd = new SqlCommand(sb.ToString(), connection, transaction);
+                // Timeout alto anche per il comando raw: il default ADO è 30s e la UPDATE
+                // con JOIN a tre tabelle su VPN poteva morire ben prima del timeout del context EF.
+                cmd.CommandTimeout = SqlTools.CommandTimeoutSeconds;
                 cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 8).Value = sFromDate;
                 cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 8).Value = sToDate;
                 cmd.Parameters.Add("@AllNumbers", SqlDbType.Bit).Value = filtri.AllNumbers;
