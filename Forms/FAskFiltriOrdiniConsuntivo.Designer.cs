@@ -345,7 +345,7 @@
             ChkProseguiAnomalie.Name = "ChkProseguiAnomalie";
             ChkProseguiAnomalie.Size = new Size(220, 19);
             ChkProseguiAnomalie.TabIndex = 7;
-            ChkProseguiAnomalie.Text = "Prosegui comunque con le anomalie";
+            ChkProseguiAnomalie.Text = "Prosegui elaborazione con le anomalie";
             ChkProseguiAnomalie.UseVisualStyleBackColor = true;
             // 
             // FAskFiltriOrdiniConsuntivo

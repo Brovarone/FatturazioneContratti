@@ -588,6 +588,11 @@ namespace FatturazioneContratti.Invoicing
                 var saleDoc = new MaSaleDoc();
                 bool testaDaScrivere = true;
 
+                // Fase di generazione a video: da qui in poi non si "estraggono" più
+                // ordini, quindi la label cambia per non restare irta sulla fase di load
+                // (nel run reale il buco era tutto qui, 21/10/2026).
+                updateStatus?.Invoke($"Generazione fatture a consuntivo per {ordiniList.Count} ordini...");
+
                 foreach (var o in ordiniList)
                 {
                     // Confine ordine: l'interruzione si verifica qui, mai a metà fattura.
@@ -608,6 +613,7 @@ namespace FatturazioneContratti.Invoicing
                     }
                     indice++;
                     progress2?.Advance();
+                    updateStatus?.Invoke($"Ordini elaborati: {indice} di {ordiniList.Count}");
 
                     debugging.AppendLine($"Ordine: {o.InternalOrdNo} Cliente: {o.Customer}");
 
@@ -926,6 +932,13 @@ namespace FatturazioneContratti.Invoicing
                 // Bulk Insert transazionale
                 if (efMaSaleDoc.Count != 0)
                 {
+                    // L'utente deve capire che l'app sta lavorando: il bulk insert è la
+                    // parte che può stare in attesa di memoria SQL per minuti senza
+                    // segnali (run 21/10/2026: RESOURCE_SEMAPHORE su SQL Express). A video + una riga di log esplicita.
+                    updateStatus?.Invoke($"Scrittura fatture in corso ({efMaSaleDoc.Count} fatture)...");
+                    LogDiagnostica.Informativo(logMessage,
+                        $"Scrittura in corso: {efMaSaleDoc.Count} teste, {efMaSaleDocDetails.Count} righe, {efMaCrossReferences.Count} cross-ref, {efMaEiItdocAdditionalData.Count} dati FE");
+
                     bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_ordiniCntx, () =>
                     {
                         BulkPersistenceHelper.BulkExecuteList(_ordiniCntx, efMaSaleDoc, "MaSaleDoc", BulkOperation.Insert, "fatture", bulkMessage, token);

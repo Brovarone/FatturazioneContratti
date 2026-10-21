@@ -360,6 +360,13 @@ riepilogo `Trovati X interventi su Y contratti cessati: verificare in Integra.`
       La VPN non c'entrava: il DB è `ACERBO\SQLEXPRESS`, le query erano il problema.
 - [x] **Cronometro fasi nel log**: "Interventi estratti … | caricamento: Xs" e
       "Fatture generate: N | tempo totale: Ys" per leggere i tempi a ogni run.
+- [x] **Stato a video per fase (run 12:50 del 21/10)**: la label restava su
+      "Estrazione ordini..." per tutto lo Step 2 e il bulk insert finale (in
+      attesa di memoria SQL, `RESOURCE_SEMAPHORE` ~5,5 min) non dava segnali.
+      Ora: label per fase ("Generazione fatture per N ordini…" / "Ordini
+      elaborati: X di Y" / "Scrittura fatture in corso (N)...") + riga log
+      "Scrittura in corso: …" prima del bulk. Diagnosi confermata: il "loop su
+      LstStato_DrawItem" era un'illusione da pausa del debugger, non un bug.
 - [x] **Pulsante "Interrompi"**: `CancellationToken` propagato ai 4 workflow,
       check ai confini di blocco (ordine/contratto/intervento/chunk); se il
       token arriva con transazione bulk aperta → **rollback esplicito** + throw
