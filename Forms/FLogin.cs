@@ -7,7 +7,6 @@ using System;
 using System.Data;
 using System.Drawing;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Windows.Forms;
 
@@ -100,18 +99,13 @@ namespace FatturazioneContratti.Forms
             // righe lunghe (MeasureItem calcola l'altezza in base al testo) e per
             // colorare la riga in base al tag emesso da LogDiagnostica ([ERRORE]/[AVVISO]).
             // Il ListBox resta identico come uso: Items.Add / TopIndex / Clear non cambiano.
+            // L'altezza viene calcolata UNA volta, quando la riga entra nel log: nessun
+            // ricalcolo al resize (il vecchio toggle/rimisura causava crash e loop di
+            // repaint, 21/10/2026). Se la finestra viene allargata, le righe lunghe
+            // semplicemente non si redistribuiscono: il log è temporaneo, va bene così.
             lstStato.DrawMode = DrawMode.OwnerDrawVariable;
             lstStato.MeasureItem += LstStato_MeasureItem;
             lstStato.DrawItem += LstStato_DrawItem;
-            lstStato.SizeChanged += LstStato_SizeChanged;
-
-            // Ricalcolo altezze del log con debounce: al resize non si può ricreare
-            // l'handle del ListBox (crash Win32Exception) — vedi LstStato_SizeChanged.
-            _riminutaRigheLog.Tick += (_, _) =>
-            {
-                _riminutaRigheLog.Stop();
-                RimisuraAltezzeRigheLog();
-            };
         }
 
         private void FLogin_Load(object sender, EventArgs e)
@@ -590,46 +584,11 @@ namespace FatturazioneContratti.Forms
         }
 
         /// <summary>
-        /// Il ListBox in OwnerDrawVariable memorizza le altezze già misurate: quando cambia
-        /// la larghezza vanno ricalcolate, altrimenti il testo wrappato resta tagliato.
-        /// NON si cambia DrawMode qui: ricrea l'handle dentro il messaggio di resize e
-        /// fa schiantare con Win32Exception "Errore durante la creazione dell'handle"
-        /// (crash reale del 21/10/2026). Si aggiorna invece l'altezza di ogni item con
-        /// LB_SETITEMHEIGHT, con un debounce per non farlo a ogni pixel trascinato.
+        /// Il ListBox in OwnerDrawVariable memorizza le altezze calcolate al momento
+        /// dell'inserimento: NON si ricalcolano più al resize (il vecchio toggle di
+        /// DrawMode ricreava l'handle → Win32Exception, e la rimisura con LB_SETITEMHEIGHT
+        /// poteva innescare un loop di repaint con la scrollbar, 21/10/2026).
         /// </summary>
-        private void LstStato_SizeChanged(object? sender, EventArgs e)
-        {
-            if (!lstStato.IsHandleCreated || lstStato.IsDisposed) return;
-            _riminutaRigheLog.Stop();
-            _riminutaRigheLog.Start();
-        }
-
-        /// <summary>
-        /// Ricalcola l'altezza di tutte le righe di log alla larghezza corrente, senza
-        /// ricreare l'handle: LB_SETITEMHEIGHT aggiorna l'altezza del singolo item.
-        /// </summary>
-        private void RimisuraAltezzeRigheLog()
-        {
-            if (!lstStato.IsHandleCreated || lstStato.IsDisposed || lstStato.Items.Count == 0) return;
-
-            var hwnd = lstStato.Handle;
-            for (int i = 0; i < lstStato.Items.Count; i++)
-            {
-                int altezza = CalcolaAltezzaRigaLog(lstStato.Items[i]?.ToString() ?? string.Empty);
-                SendMessage(hwnd, LB_SETITEMHEIGHT, (IntPtr)i, (IntPtr)altezza);
-            }
-            lstStato.Invalidate();
-        }
-
-        /// <summary>Debounce del ricalcolo altezze del log (vedi LstStato_SizeChanged).</summary>
-        private readonly System.Windows.Forms.Timer _riminutaRigheLog = new() { Interval = 150 };
-
-        /// <summary>LB_SETITEMHEIGHT: imposta l'altezza del singolo item in OwnerDrawVariable.</summary>
-        private const int LB_SETITEMHEIGHT = 0x01A0;
-
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
         private void LnkApriLog_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             ApriFileLog();
