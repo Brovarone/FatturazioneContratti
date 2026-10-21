@@ -298,45 +298,44 @@ namespace FatturazioneContratti.Invoicing
                     string riepilogo = $"Contratti duplicati={fatalContrattoErrorList.Count}, Eventi multipli={fatalEventoErrorList.Count}, Contratti mancanti={contrattoErrorList.Count}, Eventi mancanti={eventoErrorList.Count}";
 
                     var dettaglio = new StringBuilder();
-                    dettaglio.AppendLine("Riscontrate anomalie o incongruenze nel controllo flusso.");
+                    dettaglio.AppendLine("[AVVISO] Riscontrate anomalie o incongruenze nel controllo flusso.");
                     dettaglio.AppendLine();
 
                     if (fatalContrattoErrorList.Count != 0)
                     {
-                        dettaglio.AppendLine("ERRORE CRITICO - Contratti duplicati:");
+                        dettaglio.AppendLine("[ERRORE] ERRORE CRITICO - Contratti duplicati:");
                         foreach (var c in fatalContrattoErrorList) dettaglio.AppendLine($" - {c}");
                         dettaglio.AppendLine();
                     }
 
                     if (fatalEventoErrorList.Count != 0)
                     {
-                        dettaglio.AppendLine("ERRORE CRITICO - Eventi multipli per contratto:");
+                        dettaglio.AppendLine("[ERRORE] ERRORE CRITICO - Eventi multipli per contratto:");
                         foreach (var e in fatalEventoErrorList) dettaglio.AppendLine($" - {e}");
                         dettaglio.AppendLine();
                     }
 
                     if (contrattoErrorList.Count != 0)
                     {
-                        dettaglio.AppendLine("CONTRATTI NON TROVATI:");
+                        dettaglio.AppendLine("[AVVISO] CONTRATTI NON TROVATI:");
                         foreach (var c in contrattoErrorList) dettaglio.AppendLine($" - {c}");
                         dettaglio.AppendLine();
                     }
 
                     if (eventoErrorList.Count != 0)
                     {
-                        dettaglio.AppendLine("EVENTI NON ASSOCIATI:");
+                        dettaglio.AppendLine("[AVVISO] EVENTI NON ASSOCIATI:");
                         foreach (var e in eventoErrorList) dettaglio.AppendLine($" - {e}");
                         dettaglio.AppendLine();
                     }
 
                     dettaglio.AppendLine($"Riepilogo: {riepilogo}");
 
-                    // UI: una riga sola con i contatori (il dettaglio resterebbe illeggibile
-                    // nel ListBox). Va SOLO su UI: il file riceve il dettaglio completo
-                    // subito dopo, e con "Both" la testa finirebbe due volte nel log.
-                    logMessage?.Invoke($"Riscontrate anomalie o incongruenze nel controllo flusso. {riepilogo}", LogTarget.Ui);
-                    // File: dettaglio completo (sezioni + riepilogo), scritto UNA volta sola
-                    logMessage?.Invoke(dettaglio.ToString(), LogTarget.File);
+                    // Dettaglio a video e su file in un colpo solo: Blocco con "Both" emette
+                    // nel ListBox riga per riga (le intestazioni con tag [ERRORE]/[AVVISO]
+                    // appaiono colorate) e sul file come unico evento multi-riga, con il
+                    // dettaglio indentato sotto la riga datata.
+                    LogDiagnostica.Blocco(logMessage, null, dettaglio.ToString().Split('\n'), LogTarget.Both);
                     return false;
                 }
 

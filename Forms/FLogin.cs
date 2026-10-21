@@ -312,6 +312,11 @@ namespace FatturazioneContratti.Forms
             // UI iniziale
             SetUiBusy(true);
             lnkApriLog.Visible = false;   // via il link della sessione precedente
+
+            // Reset della label di stato: senza questo restava rossa/di esito
+            // della run precedente per tutta la nuova elaborazione.
+            AggiornaStato("Elaborazione in corso...", Color.Black);
+
             Log($"=== {nomeProcesso} ({DateTime.Now:dd/MM/yyyy HH:mm:ss}) ===");
             // Nel file di sessione deve restare traccia del DB usato (produzione o test):
             // l'etichetta lo mostra, ma il log no, e in lettura è la prima cosa che serve.
