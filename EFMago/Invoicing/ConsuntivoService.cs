@@ -335,11 +335,11 @@ namespace FatturazioneContratti.Invoicing
 
                     dettaglio.AppendLine($"Riepilogo: {riepilogo}");
 
-                    // Dettaglio a video e su file in un colpo solo: Blocco con "Both" emette
-                    // nel ListBox riga per riga (le intestazioni con tag [ERRORE]/[AVVISO]
-                    // appaiono colorate) e sul file come unico evento multi-riga, con il
-                    // dettaglio indentato sotto la riga datata.
-                    LogDiagnostica.Blocco(logMessage, null, dettaglio.ToString().Split('\n'), LogTarget.Both);
+                    // A video SOLO la riga di sintesi (tag [AVVISO] => riga arancio nel
+                    // ListBox); l'elenco completo delle anomalie va SOLO sul file, in un
+                    // colpo solo, con il dettaglio indentato sotto la riga datata.
+                    logMessage?.Invoke($"[AVVISO] Riscontrate anomalie o incongruenze nel controllo flusso. {riepilogo}", LogTarget.Ui);
+                    logMessage?.Invoke(dettaglio.ToString(), LogTarget.File);
 
                     // Anomalie solo "non critiche" (contratti mancanti / eventi non associati):
                     // con il flag "Prosegui comunque" si prosegue, le sezioni di dettaglio
