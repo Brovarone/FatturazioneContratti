@@ -94,6 +94,13 @@ namespace FatturazioneContratti.Forms
             // Usa l'icona dell'eseguibile come icona della form
             try { this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
             catch { }
+
+            // Log colorato: OwnerDraw per colorare la riga in base al tag emesso da
+            // LogDiagnostica ([ERRORE]/[AVVISO]). Il ListBox resta identico come uso:
+            // Items.Add / TopIndex / Clear non cambiano.
+            lstStato.DrawMode = DrawMode.OwnerDrawFixed;
+            lstStato.ItemHeight = lstStato.Font.Height + 3;
+            lstStato.DrawItem += LstStato_DrawItem;
         }
 
         private void FLogin_Load(object sender, EventArgs e)
@@ -441,6 +448,34 @@ namespace FatturazioneContratti.Forms
         }        
 
         private void BtnPulisciStato_Click(object sender, EventArgs e) => lstStato.Items.Clear();
+
+        /// <summary>
+        /// Disegno personalizzato del log a video: colora la riga in base al tag presente
+        /// nel testo ([ERRORE] = rosso mattone, [AVVISO] = arancio), gli altri restano
+        /// normali. La selezione continua a funzionare perché DrawBackground disegna
+        /// l'evidenziazione standard e il testo selezionato usa HighlightText.
+        /// </summary>
+        private void LstStato_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= lstStato.Items.Count) return;
+
+            e.DrawBackground();
+
+            string testo = lstStato.Items[e.Index]?.ToString() ?? string.Empty;
+            Color colore = testo.IndexOf("[ERRORE]", StringComparison.OrdinalIgnoreCase) >= 0
+                ? Color.Firebrick
+                : testo.IndexOf("[AVVISO]", StringComparison.OrdinalIgnoreCase) >= 0
+                    ? Color.DarkOrange
+                    : SystemColors.WindowText;
+
+            // Selezionato: il testo rispetta il tema (HighlightText) così resta leggibile.
+            if (e.State.HasFlag(DrawItemState.Selected)) colore = SystemColors.HighlightText;
+
+            TextRenderer.DrawText(e.Graphics, testo, e.Font, e.Bounds, colore,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+
+            e.DrawFocusRectangle();
+        }
 
         private void LnkApriLog_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {

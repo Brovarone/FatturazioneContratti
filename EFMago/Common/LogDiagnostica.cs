@@ -23,9 +23,10 @@ namespace FatturazioneContratti.Common
         public static void Informativo(Action<string, LogTarget>? log, string messaggio)
             => log?.Invoke(messaggio, SqlTools.Options.LogMode);
 
-        /// <summary>Errore/anomalia: sempre su UI e file, qualunque sia LogMode.</summary>
+        /// <summary>Errore/anomalia: sempre su UI e file, qualunque sia LogMode.
+        /// Il tag [ERRORE] evidenzia la riga anche nel ListBox colorato di FLogin.</summary>
         public static void Errore(Action<string, LogTarget>? log, string messaggio)
-            => log?.Invoke(messaggio, LogTarget.Both);
+            => log?.Invoke($"[ERRORE] {messaggio}", LogTarget.Both);
 
         /// <summary>
         /// Eccezione: riga sintetica (messaggio) su UI+file, intero oggetto con stack trace
@@ -34,13 +35,14 @@ namespace FatturazioneContratti.Common
         public static void Errore(Action<string, LogTarget>? log, Exception? ex)
         {
             if (log == null || ex == null) return;
-            log(ex.Message, LogTarget.Both);
+            log($"[ERRORE] {ex.Message}", LogTarget.Both);
             log(ex.ToString(), LogTarget.File);
         }
 
-        /// <summary>Avviso operativo (es. "controllare canoni!"): trattato come errore, cioè visibile sempre.</summary>
+        /// <summary>Avviso operativo (es. "controllare canoni!"): trattato come errore, cioè visibile sempre.
+        /// Il tag [AVVISO] evidenzia la riga anche nel ListBox colorato di FLogin.</summary>
         public static void Avviso(Action<string, LogTarget>? log, string messaggio)
-            => log?.Invoke(messaggio, LogTarget.Both);
+            => log?.Invoke($"[AVVISO] {messaggio}", LogTarget.Both);
 
         /// <summary>
         /// Emette i filtri della run **solo su file** (testo intero in un colpo solo):
