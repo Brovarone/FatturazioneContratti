@@ -375,7 +375,7 @@ namespace FatturazioneContratti.Invoicing
             var debugging = new StringBuilder();
             // Interventi registrati su contratti cessati: dettaglio per ordine sul file,
             // conteggio sintetico a video a fine elaborazione.
-            var avvisiCessati = new StringBuilder();
+            var avvisiCessati = new List<string>();
             int contrattiCessatiConInterventi = 0;
             int interventiSuContrattiCessati = 0;
 
@@ -424,10 +424,22 @@ namespace FatturazioneContratti.Invoicing
 
                 // Ordini con interventi nel periodo: serve per l'alert sui contratti cessati
                 // (interventi che Integra continua a registrare su un contratto già chiuso).
+                // Del contratto interessa il codice Integra (campo Contratto dell'intervento):
+                // o.ContractCode sulla testa ordine è vuoto nei dati reali.
                 var interventiPerOrdine = interventiList
                     .Where(i => i.MIdOrdCli.HasValue)
                     .GroupBy(i => i.MIdOrdCli!.Value)
-                    .ToDictionary(g => g.Key, g => g.Count());
+                    .ToDictionary(
+                        g => g.Key,
+                        g => new
+                        {
+                            Numero = g.Count(),
+                            Contratti = g.Select(x => x.Contratto)
+                                         .Where(c => !string.IsNullOrWhiteSpace(c))
+                                         .Distinct(StringComparer.OrdinalIgnoreCase)
+                                         .OrderBy(c => c)
+                                         .ToArray()
+                        });
 
                 // Filtro singolo ordine (FiltriOrdiniConsuntivo.SingoloOrdine/NrOrdine):
                 // flag valutato in C# così il Where resta un'espressione traducibile in SQL.
@@ -548,13 +560,17 @@ namespace FatturazioneContratti.Invoicing
                     // Alert operativo: Integra ha registrato interventi su un contratto cessato.
                     // Non blocca la fatturazione ma va verificato (contratto riaperto? data errata?).
                     // Il dettaglio va a file; a video esce solo il conteggio di fine elaborazione.
-                    if (cessatoAllaDataFattura && interventiPerOrdine.TryGetValue(o.SaleOrdId, out int nInterventiCessato))
+                    if (cessatoAllaDataFattura && interventiPerOrdine.TryGetValue(o.SaleOrdId, out var interventiOrdine))
                     {
                         contrattiCessatiConInterventi++;
-                        interventiSuContrattiCessati += nInterventiCessato;
-                        avvisiCessati.AppendLine(
-                            $"Interventi su contratto cessato: ordine {o.InternalOrdNo} cliente {o.InvoicingCustomer}" +
-                            $" (cessazione {dataCessazione:dd/MM/yyyy}, interventi nel periodo: {nInterventiCessato})");
+                        interventiSuContrattiCessati += interventiOrdine.Numero;
+
+                        string contratti = interventiOrdine.Contratti.Length != 0
+                            ? string.Join(", ", interventiOrdine.Contratti)
+                            : "(non indicato)";
+                        avvisiCessati.Add(
+                            $"ordine {o.InternalOrdNo} cliente {o.InvoicingCustomer} contratto {contratti}" +
+                            $" (cessazione {dataCessazione:dd/MM/yyyy}, interventi nel periodo: {interventiOrdine.Numero})");
                     }
 
                     // Criteri di Rottura e accorpamento fattura
@@ -824,11 +840,11 @@ namespace FatturazioneContratti.Invoicing
                 progress1?.Finish();
 
                 // Alert contratti cessati: riepilogo a video, dettaglio per ordine solo sul file.
-                if (avvisiCessati.Length > 0)
+                if (avvisiCessati.Count > 0)
                 {
                     LogDiagnostica.Avviso(logMessage,
                         $"Trovati {interventiSuContrattiCessati} interventi su {contrattiCessatiConInterventi} contratti cessati: verificare in Integra.");
-                    logMessage?.Invoke(avvisiCessati.ToString(), LogTarget.File);
+                    LogDiagnostica.Blocco(logMessage, "Dettaglio interventi su contratti cessati:", avvisiCessati, LogTarget.File);
                 }
 
                 // Aggiornamento LastSubId (conteggio raggruppato: il Count dentro il foreach

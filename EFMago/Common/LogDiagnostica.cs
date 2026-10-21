@@ -77,12 +77,42 @@ namespace FatturazioneContratti.Common
             // Statistiche bulk (una riga per tabella): dettaglio tecnico, va solo sul file.
             // A video l'utente vuole la sintesi di esito, che il servizio emette con Informativo.
             if (bulk != null && bulk.Length > 0)
-                log(bulk.ToString(), LogTarget.File);
+                Blocco(log, "Statistiche bulk:", Righe(bulk), LogTarget.File);
 
             // Tracciato diagnostico voluminoso: solo file, solo in modalità debug.
             if (debugging != null && debugging.Length > 0 && SqlTools.Options.IsDebugging)
                 log(debugging.ToString(), LogTarget.File);
         }
+
+        /// <summary>
+        /// Elenco su più righe con intestazione: sul file la testa prende il timestamp e le
+        /// righe di dettaglio restano sotto, indentate (un solo evento di log, non N eventi).
+        /// Sulla UI le righe vengono emesse separatamente, perché il ListBox non rende i '\n'.
+        /// </summary>
+        public static void Blocco(
+            Action<string, LogTarget>? log,
+            string? titolo,
+            IEnumerable<string> righe,
+            LogTarget target)
+        {
+            if (log == null) return;
+
+            var testo = new StringBuilder();
+            if (!string.IsNullOrWhiteSpace(titolo)) testo.Append(titolo);
+
+            foreach (var riga in righe)
+            {
+                if (string.IsNullOrWhiteSpace(riga)) continue;
+                if (testo.Length > 0) testo.Append('\n');
+                testo.Append("    ").Append(riga.TrimEnd());
+            }
+
+            if (testo.Length > 0) Emetti(log, testo.ToString(), target);
+        }
+
+        /// <summary>Spezza un accumulatore nei singoli messaggi, scartando righe vuote.</summary>
+        private static IEnumerable<string> Righe(StringBuilder testo)
+            => testo.ToString().Split('\n').Select(r => r.TrimEnd('\r')).Where(r => r.Length > 0);
 
         /// <summary>Emissione di un blocco di testo rispettando la regola UI-riga-per-riga.</summary>
         private static void Emetti(Action<string, LogTarget>? log, string testo, LogTarget target)

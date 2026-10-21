@@ -115,7 +115,26 @@ namespace FatturazioneContratti.Common
                     break;
             }
 
-            string msg = $"{tableName} ({stepDescription}) Righe:{count} Ins:{bulkConfig.StatsInfo?.StatsNumberInserted} Agg:{bulkConfig.StatsInfo?.StatsNumberUpdated}";
+            // Contatori: si stampa solo quello pertinente all'operazione. Prima usciva
+            // "Ins: Agg:" con i valori vuoti quando StatsInfo non era disponibile
+            // (nei fatti capita su Insert/Update, dove il conteggio righe è comunque esatto).
+            var stats = bulkConfig.StatsInfo;
+            var contatori = new List<string> { $"Righe:{count}" };
+            switch (operation)
+            {
+                case BulkOperation.Insert:
+                    contatori.Add($"Ins:{stats?.StatsNumberInserted ?? count}");
+                    break;
+                case BulkOperation.Update:
+                    contatori.Add($"Agg:{stats?.StatsNumberUpdated ?? count}");
+                    break;
+                default:
+                    if (stats?.StatsNumberInserted is int inserite) contatori.Add($"Ins:{inserite}");
+                    if (stats?.StatsNumberUpdated is int aggiornate) contatori.Add($"Agg:{aggiornate}");
+                    break;
+            }
+
+            string msg = $"{tableName} ({stepDescription}) {string.Join(" ", contatori)}";
             logBuilder?.AppendLine(msg);
             Debug.WriteLine(msg);
         }
