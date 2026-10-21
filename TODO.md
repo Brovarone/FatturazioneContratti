@@ -351,12 +351,21 @@ riepilogo `Trovati X interventi su Y contratti cessati: verificare in Integra.`
 - [x] **Clienti ridotti**: `GeneraFattureConsuntivo` carica solo i `MaCustSupp`
       (+options) degli `InvoicingCustomer` presenti negli ordini estratti;
       l'anagrafica intera di ALLSPA (migliaia di righe) era la query morta via VPN.
+      **Misura reale (21/10, VPN spenta, SQL Express locale, sola lettura)**:
+      tabella intera = 36.334 righe in **232-246s** (era il timeout dei 180s);
+      filtrata = 24 righe in **3,8s alla prima esecuzione** (compilazione query inclusa).
+- [x] **AsSplitQuery sulla query ordini** del consuntivo: senza split la query
+      con 7 Include di collection produce un prodotto cartesiano —
+      **67s → 11s** misurati sugli stessi 34 ordini (VPN spenta, DB locale).
+      La VPN non c'entrava: il DB è `ACERBO\SQLEXPRESS`, le query erano il problema.
+- [x] **Cronometro fasi nel log**: "Interventi estratti … | caricamento: Xs" e
+      "Fatture generate: N | tempo totale: Ys" per leggere i tempi a ogni run.
 - [x] **Pulsante "Interrompi"**: `CancellationToken` propagato ai 4 workflow,
       check ai confini di blocco (ordine/contratto/intervento/chunk); se il
       token arriva con transazione bulk aperta → **rollback esplicito** + throw
       (decisione utente). `EseguiOperazione` gestisce `OperationCanceledException`
       come esito "INTERROTTO" (arancio), non errore critico.
-- [x] **Checkbox "Prosegui comunque"** nel form filtri consuntivo (default
+- [x] **Checkbox "Prosegui elaborazione"** nel form filtri consuntivo (default
       false, attiva solo con lo step controllo abilitato): se ON e ci sono SOLO
       anomalie non critiche (contratti mancanti / eventi non associati) si
       prosegue con la fatturazione; anomalie critiche (duplicati) bloccano comunque.
