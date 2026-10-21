@@ -455,6 +455,21 @@ namespace FatturazioneContratti.Invoicing
                     .ThenBy(o => o.Carrier1)
                     .ToList();
 
+                // Conteggi della run: interventi estratti, ordini distinti ricavati dagli
+                // interventi e ordini effettivamente caricati da MA_SaleOrd.
+                LogDiagnostica.Informativo(logMessage,
+                    $"Interventi estratti: {interventiList.Count} | Ordini distinti: {aOrdini.Length} | Ordini caricati: {ordiniList.Count}");
+
+                // Discrepanza = intervento che punta a un ordine assente in MA_SaleOrd.
+                // Col filtro singolo ordine la differenza è voluta (si carica un ordine solo).
+                if (!soloOrdine && ordiniList.Count != aOrdini.Length)
+                {
+                    var idOrdiniNonTrovati = aOrdini.Except(ordiniList.Select(o => o.SaleOrdId)).ToArray();
+                    LogDiagnostica.Avviso(logMessage,
+                        $"Attenzione: {idOrdiniNonTrovati.Length} ordini con interventi non trovati in MA_SaleOrd" +
+                        $" (ID: {string.Join(", ", idOrdiniNonTrovati)}).");
+                }
+
                 // Progress a blocchi da 100 record (stessa logica di GenerazioneRigheOrdiniService):
                 // barra grande = blocchi, barra piccola = ordini del blocco corrente.
                 int numeroBlocchi = Math.Max(1, (ordiniList.Count + DimensioneBlocco - 1) / DimensioneBlocco);
