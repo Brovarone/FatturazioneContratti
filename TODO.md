@@ -309,3 +309,28 @@ Branch: `feature/libreria-efmago`.
 
 Note per il sito: niente health/schema check a runtime (`ModelManifest` differito);
 istanziazione manuale dei servizi (niente DI nella libreria); stesso pattern contatori/audit.
+
+---
+
+## 8. Fix consuntivo - cessazione contratti (21/10/2026)
+
+**Bug**: in `GeneraFattureConsuntivo` la riga si scriveva solo se
+`ALLOrdCliAcc.DataCessazione != 1799-12-31`, cioe' **solo per i contratti cessati**
+(condizione ereditata da `OrdiniConsuntivi.vb:237`, che aveva gia' il
+`todo: controllare efficacia di questo controllo`). Su ALLSPA settembre 2026:
+185 interventi, 34 ordini agganciati, 12 con quantita' oltre franchigia, ma solo
+2 fatture (entrambe su contratti cessati).
+
+**Regola adottata** (stesso criterio di `OrdiniConsuntivi.vb:734-736`):
+si fattura se il contratto e' attivo (`DataCessazione == 1799-12-31`) **oppure**
+se la cessazione e' successiva alla data fattura (ultimo mese utile).
+
+**Alert**: se un contratto risulta gia' cessato alla data fattura ma ha interventi
+nel periodo, il dettaglio per ordine va **solo sul file** e a video esce il
+riepilogo `Trovati X interventi su Y contratti cessati: verificare in Integra.`
+
+**Verifica** (harness read-only su ALLSPA, settembre 2026): 10 fatture attese,
+2 contratti cessati con 9 interventi (15/00791 E50089, 21/01124 E50089).
+
+> Da fare in Mago su ALLSPA: annullare/eliminare le fatture `SaleDocId` 59240 e 59241
+> (30/09/2026, cliente E50089) scritte con la regola sbagliata, poi rilanciare.

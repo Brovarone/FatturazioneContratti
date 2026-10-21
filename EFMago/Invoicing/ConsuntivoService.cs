@@ -373,6 +373,11 @@ namespace FatturazioneContratti.Invoicing
         {
             var bulkMessage = new StringBuilder();
             var debugging = new StringBuilder();
+            // Interventi registrati su contratti cessati: dettaglio per ordine sul file,
+            // conteggio sintetico a video a fine elaborazione.
+            var avvisiCessati = new StringBuilder();
+            int contrattiCessatiConInterventi = 0;
+            int interventiSuContrattiCessati = 0;
 
             try
             {
@@ -416,6 +421,13 @@ namespace FatturazioneContratti.Invoicing
                 var interventiList = intFiltrati.ToList();
                 // Gli ID si ricavano dalla lista già materializzata: la query non va eseguita due volte.
                 int[] aOrdini = interventiList.Select(s => s.MIdOrdCli ?? 0).Where(id => id > 0).Distinct().ToArray();
+
+                // Ordini con interventi nel periodo: serve per l'alert sui contratti cessati
+                // (interventi che Integra continua a registrare su un contratto già chiuso).
+                var interventiPerOrdine = interventiList
+                    .Where(i => i.MIdOrdCli.HasValue)
+                    .GroupBy(i => i.MIdOrdCli!.Value)
+                    .ToDictionary(g => g.Key, g => g.Count());
 
                 // Filtro singolo ordine (FiltriOrdiniConsuntivo.SingoloOrdine/NrOrdine):
                 // flag valutato in C# così il Where resta un'espressione traducibile in SQL.
@@ -505,6 +517,31 @@ namespace FatturazioneContratti.Invoicing
 
                     debugging.AppendLine($"Ordine: {o.InternalOrdNo} Cliente: {o.Customer}");
 
+                    // Cessazione del contratto (testa ordine): 1799-12-31 = contratto attivo.
+                    var dataCessazione = o.ALLOrdCliAcc?.DataCessazione ?? DomainConstants.DataNulla;
+                    bool contrattoCessato = dataCessazione != DomainConstants.DataNulla;
+
+                    // La riga si fattura se il contratto è attivo oppure se la cessazione è
+                    // successiva alla data fattura (ultimo mese utile di fatturazione).
+                    // Stesso criterio usato in OrdiniConsuntivi.vb (righe 734-736).
+                    bool cessazioneDopoFattura = !contrattoCessato || dataCessazione >= filtri.DataFattura;
+
+                    // Contratto già cessato alla data fattura: gli interventi del periodo sono
+                    // anomali (Integra li ha registrati dopo la chiusura) e vanno segnalati.
+                    bool cessatoAllaDataFattura = contrattoCessato && dataCessazione < filtri.DataFattura;
+
+                    // Alert operativo: Integra ha registrato interventi su un contratto cessato.
+                    // Non blocca la fatturazione ma va verificato (contratto riaperto? data errata?).
+                    // Il dettaglio va a file; a video esce solo il conteggio di fine elaborazione.
+                    if (cessatoAllaDataFattura && interventiPerOrdine.TryGetValue(o.SaleOrdId, out int nInterventiCessato))
+                    {
+                        contrattiCessatiConInterventi++;
+                        interventiSuContrattiCessati += nInterventiCessato;
+                        avvisiCessati.AppendLine(
+                            $"Interventi su contratto cessato: ordine {o.InternalOrdNo} cliente {o.InvoicingCustomer}" +
+                            $" (cessazione {dataCessazione:dd/MM/yyyy}, interventi nel periodo: {nInterventiCessato})");
+                    }
+
                     // Criteri di Rottura e accorpamento fattura
                     if (Break(o, saleDoc, cFattura.Cliente, paramSaleOrd))
                     {
@@ -567,7 +604,7 @@ namespace FatturazioneContratti.Invoicing
                                         }
                                     }
 
-                                    if ((s.NrInterventiOltreFranchigia ?? 0) > 0 && (o.ALLOrdCliAcc?.DataCessazione ?? DomainConstants.DataNulla) != DomainConstants.DataNulla)
+                                    if ((s.NrInterventiOltreFranchigia ?? 0) > 0 && cessazioneDopoFattura)
                                     {
                                         var cFattRow = new CurFattRow
                                         {
@@ -770,6 +807,14 @@ namespace FatturazioneContratti.Invoicing
                 if (indice > 0) progress2?.Finish();
                 progress1?.Advance();
                 progress1?.Finish();
+
+                // Alert contratti cessati: riepilogo a video, dettaglio per ordine solo sul file.
+                if (avvisiCessati.Length > 0)
+                {
+                    LogDiagnostica.Avviso(logMessage,
+                        $"Trovati {interventiSuContrattiCessati} interventi su {contrattiCessatiConInterventi} contratti cessati: verificare in Integra.");
+                    logMessage?.Invoke(avvisiCessati.ToString(), LogTarget.File);
+                }
 
                 // Aggiornamento LastSubId (conteggio raggruppato: il Count dentro il foreach
                 // era O(fatture x righe))
