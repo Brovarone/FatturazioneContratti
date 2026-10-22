@@ -393,7 +393,7 @@ namespace FatturazioneContratti.Orders
             finally
             {
                 // Errori e avvisi sempre, statistiche bulk e tracciato diagnostico
-                // secondo la regola di routing (vedi TODO §1b).
+                // secondo la regola di routing (vedi AGENTS.md, §Log e diagnostica).
                 LogDiagnostica.Scarica(logMessage, errori, avvisi, bulkMessage, debugging);
             }
 

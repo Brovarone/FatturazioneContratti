@@ -5,7 +5,7 @@ using System.Text;
 namespace FatturazioneContratti.Common
 {
     /// <summary>
-    /// Routing dei log in un punto solo (decisioni del 16/10/2026, vedi TODO §1b):
+    /// Routing dei log in un punto solo (procedure in AGENTS.md, §Log e diagnostica):
     /// - errori / anomalie / rollback  -> <see cref="LogTarget.Both"/> (sempre visibili)
     /// - filtri della run              -> <see cref="LogTarget.File"/> (solo file, sempre)
     /// - informativi (conteggi, riepiloghi di esito) -> <see cref="SqlTools.Options.LogMode"/>

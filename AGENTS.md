@@ -23,8 +23,9 @@ Tutte le impostazioni runtime in `AppConfig` (classe statica, JSON-backed):
 - **Connessione**: `SqlServer`, `UserId` (default `sa`), `Password`, `LoginId`
 - **Database**: `DatabaseUno` / `DatabaseSpa` (produzione), `TmpDatabaseUno` / `TmpDatabaseSpa` (test)
 - **DB attivo**: proprietà `DatabaseInUse` commutata da flag `IsDbUno` + `IsTestDb`
-- **Percorsi**: `Path`, `FoxPath`, `PathPaghe`, `LastLogPath`
-- **Debug**: `IsDebugging` abilita EF Core detailed errors + sensitive data logging
+- **Percorsi**: `Path`, `FoxPath`, `PathPaghe`, `LastLogPath` (cartella del log di sessione)
+- **Log**: `LogMode` (`Ui` / `File` / `Both`, default `Both`) — instrada gli informativi; errori e avvisi vanno sempre su entrambi (vedi §Log e diagnostica)
+- **Debug**: `IsDebugging` abilita EF Core detailed errors + sensitive data logging e il tracciato `debugging` su file
 
 **Primo avvio**: "Configurazione Avanzata" (password `123456`) → compila connessione + nomi DB → Test → Salva.
 
@@ -45,6 +46,7 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 - `Data/Models/` — **Generati** da `copia.ps1` (copia 100+ classi entità da `ALLMigrazione\EFMago\Models\`). Non modificare a mano.
 - `SqlTools.CreateContext()` — factory; rispetta `EfmagoOptions` + flag `IsDebugging` (registrate dall'ospite via `Configure`).
 - `SqlTools.OpenDirectConnection()` — `SqlConnection` raw con `ARITHABORT ON` (richiesto per indici filtrati Mago).
+- `SqlTools.CommandTimeoutSeconds = 600` — timeout unico dei comandi: applicato in `CreateContext()` e da passare ai `SqlCommand` raw (il default ADO di 30s e i 180s EF andavano in timeout sulle query grosse).
 
 ### Modelli di Dominio (`EFMago/Common/`, `Orders/`, `Invoicing/`)
 | File | Scopo |
@@ -58,6 +60,8 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 | `FattureContextExtensions.AddNew<T>()` | Crea istanza entità con tutti i `HasDefaultValueSql` applicati (replica VB `DataSet.AddNew`). Inizializzatori cachati **per `IModel`**, non per tipo |
 | `StringHelpers.SubstringSafe` | Troncamento sicuro (trim + max len), mai null — usato dai servizi su campi nota |
 | `MagoEnum.cs` | `LineType`, `DocumentType`, `CrossReference` — valori FK Mago. Usare gli enum, mai numeri hardcoded |
+| `LogDiagnostica.cs` | Routing log centralizzato: `Informativo` → `LogMode`, `Errore`/`Avviso` → `Both`, `LogFiltri` e statistiche bulk → `File`, `Blocco`, `Scarica(...)` chiamata nei `finally` dei workflow |
+| `ILogFiltri.cs` | Contratto `CostruisciFiltriLog()` / `LogFiltri` implementato dai 3 DTO filtri |
 | `CrashLogger.cs` | Log crash globale (`crash_yyyyMMdd_HHmmss_fff.log`), chiamato dai handler in `Program.cs` |
 | `BulkPersistenceHelper` | Wrapper `EFCore.BulkExtensions`; esegue `BulkInsert`/`BulkUpdate`/`BulkInsertOrUpdate` in transazione con `DBCC TRACEON(610)` per minimal logging |
 
@@ -69,10 +73,14 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
   - Ciclo a blocchi come **iterator locale** `CaricaOrdiniPerBlocco` (stesso pattern del workflow ISTAT)
   - Carica prima solo ID ordini, poi processa a blocchi (default 100) con `AsSplitQuery()` + predicato `OR`
   - **Modalità debug** (`AppConfig.IsDebugging`): forza scan atomico per-order per far emergere `SqlNullValueException` su righe corrotte
-  - Accumula cambiamenti in memoria → singola transazione bulk finale
+  - Accumula cambiamenti in memoria → singola transazione bulk finale; `EseguiSalvataggioTransazionale` ritorna `bool` e `[COMPLETATO]` esce solo senza errori
+  - `CancellationToken` controllato ai confini di ordine/contratto/blocco; se arriva con transazione aperta → rollback esplicito + throw
 - **ConsuntivoService** — `ControllaFlussoIntegra()` (valida interventi), `GeneraFattureConsuntivo()` (bulk-insert fatture)
   - Usa mapping hardcoded: `FilialiMapping`, `MappingsEventoIntegra`, `CausaliPagamentoFatturaElettronica`
   - Logica raggruppamento fatture in `Break()` — rispetta flag `MaSalesOrdParameters` fulfillment break
+  - **Regola cessazione**: si fattura se il contratto è attivo (`DataCessazione == DataNulla`) **oppure** se la cessazione è ≥ `Filtri.DataFattura` (ultimo mese utile). Non si fattura più solo per i contratti cessati (bug ereditato da `OrdiniConsuntivi.vb`). Se un contratto **è già cessato alla data fattura** ma ha interventi nel periodo: a video solo il riepilogo `[AVVISO] Trovati X interventi su Y contratti cessati`, dettaglio per ordine solo su file
+  - `FiltriOrdiniConsuntivo.ProseguiAnomalie` ("Prosegui comunque"): prosegue con anomalie **non critiche** (contratti mancanti / eventi non associati); le anomalie critiche (duplicati) bloccano sempre
+  - Performance: interventi/ordini con `AsSplitQuery()` (7 Include di collection → prodotto cartesiano, 67s → 11s), `MaCustSupp` caricati solo per gli `InvoicingCustomer` degli ordini estratti (36k righe/232s → 24 righe/3,8s), `progress2` a blocchi da 100 con `Finish` finale
 - **AggiornamentoFattureService** — classe `static`, `UPDATE` SQL raw join `MA_SaleDocDetail` → `MA_SaleOrdDetails`, con `SqlConnection`/`SqlTransaction` ricevuti dal caller
   - Resta raw di proposito (l'`UPDATE ... FROM` su 3 tabelle è scomodo in EF), ma i valori sono presi dagli enum `MagoEnum` e il timestamp è unico per operazione
   - Unico residuo raw: i **nomi di tabella/colonna**, non tipizzati dal compilatore
@@ -86,9 +94,25 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 
 ### UI (`Forms/`)
 - `FLogin` — form principale, orchestra i 4 workflow via `Task.Run` background
-- `FSettings` — dialog configurazione (password-protetta)
-- `FAskFiltriOrdini` / `FAskFiltriOrdiniConsuntivo` — dialog input filtri
-- Progress reporting via `UiProgress` + delegati `ProgressCallbacks`
+  - `EseguiOperazione(nome, Func<CancellationToken,bool>)`: una `CancellationTokenSource` per run, pulsante **Interrompi** (una sola richiesta), esito "INTERROTTO" arancio su `OperationCanceledException`
+  - `lblStatus` resettata a inizio run; esito finale verde/rosso; LinkLabel "Apri file di log" (file → Notepad → cartella)
+  - Righe di log colorate per tag `[ERRORE]`/`[AVVISO]`; righe lunghe vanno a capo
+- `FSettings` — dialog configurazione (password-protetta), include `LogMode` (UI / File / Entrambi)
+- `FAskFiltriOrdini` / `FAskFiltriOrdiniConsuntivo` / `FAskFiltriAllineamentoFatture` — dialog input filtri
+- Progress reporting via `UiProgress` + `ProgressCallbacks` (factory `FLogin.CreaProgress`)
+
+### Log e diagnostica (procedure)
+- **Routing centralizzato in `EFMago/Common/LogDiagnostica.cs`** — i servizi non scelgono mai il target a mano:
+  - errori / anomalie / rollback → `Errore(...)` / `Avviso(...)` → `LogTarget.Both` (sempre visibili, con tag `[ERRORE]` / `[AVVISO]`)
+  - eccezioni → `Errore(log, ex)`: messaggio su UI+file, stack solo su file
+  - informativi (conteggi, riepiloghi di esito) → `Informativo(...)` → `AppConfig.LogMode`
+  - filtri della run → `LogFiltri(...)` → **solo file**, sempre (a video inondavano il ListBox)
+  - statistiche bulk (una riga per tabella) → `Scarica(...)` → **solo file**, sempre; a video basta la sintesi emessa dal servizio
+  - tracciato `debugging` (lungo, una riga per ordine/attività) → **solo file**, solo se `IsDebugging`
+  - accumulatori (`errori`, `avvisi`, `bulk`, `debugging`) scaricati da `LogDiagnostica.Scarica(...)` nel `finally` del workflow
+- **Blocchi multi-riga**: se il target include la UI vanno emessi **riga per riga** (il ListBox non rende `\n`); se è solo file, in un colpo solo (più veloce, preserva le righe vuote)
+- **File di sessione**: `FLogin_Load` crea `FatturazioneContratti_yyyyMMdd_HHmmss.log` (anche vuoto) in `AppConfig.LastLogPath` e salva il percorso; da lì si apre dal LinkLabel
+- **Crash globali**: handler in `Program.cs` → `Common/CrashLogger.cs` (`crash_yyyyMMdd_HHmmss_fff.log`), separato dal log di sessione
 
 ## Comandi Sviluppatore
 
@@ -144,6 +168,9 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 13. **Stato di elaborazione esplicito** — Quando un metodo supera ~150 righe, raggruppa collettori/accumulatori in una classe di stato (`StatoElaborazioneOrdini`) invece di moltiplicare parametri `out`/`ref`.
 14. **`DataProssimaFatt`: una sola colonna viva su tre** — esiste su `ALLOrdCliContratto` (viva: unica letta/scritta dai canoni, `CurOrdRow(AllordCliContratto)` + `ElaboraContratto`), su `ALLOrdCliContratto_Distinta` e su `ALLOrdCliContratto_Distinta_ServAgg` (deprecate: popolate solo dall'import Fox `ContrattiFox.vb`, mai mantenute, quindi ferme al valore d'import — verificate 21/10/2026: 272 distinte e 535 servagg già divergenti). Non eliminarle: potrebbero servire in futuro (consuntivo per servizio, sito). Se le si adotta, riallinearle e aggiornare questa nota.
 15. **`TipoRigaServizio` ridondante sulle righe figlie** — il tipo esiste su contratto, distinta e servaggi aggiuntivi, ma è **decisionale solo sul contratto** (`CurOrdRow`/`ElaboraContratto`: tipologia, periodicità, cadenza, campagna; ISTAT idem). Su distinta e servagg è ridondante e non letto da alcun flusso: il consuntivo usa `Periodicita`/`Franchigia`/`Servizio` **propri della riga servagg**, non il suo FK tipo. Le differenze osservate su ALLSPA (21/10/2026: 54 su 1.268 confronti contratto↔distinta) sono tutte campagna `ESTANT` sotto canone o canone sotto campagna, e in 40/40 casi l'ordine ha già la riga contratto `ESTANT` dedicata: **non sono errori e non vanno allineate**. Regola: non leggere il tipo delle righe figlie per decisioni di fatturazione; se un giorno servirà, definire prima quale livello possiede il tipo.
+16. **Log: sempre via `LogDiagnostica`** — nei servizi non si passa mai `LogTarget` a mano (né `LogToUi`/`LogToFile`, che non esistono più). Errori/anomalie/rollback devono restare visibili pure con `LogMode = File`: usa `Errore`/`Avviso`, non `Informativo`. I filtri della run e le statistiche bulk vanno **solo su file**. Ogni nuovo workflow chiude con `LogDiagnostica.Scarica(...)` nel `finally`, altrimenti gli accumulatori non arrivano a nessuno.
+17. **Interruzione cooperativa** — i workflow ricevono `CancellationToken` e lo controllano ai confini naturali (ordine/contratto/intervento/chunk), mai dentro il ciclo bulk. Se il token arriva con transazione aperta: rollback esplicito e `throw` (non `return`), così l'esito resta "INTERROTTO" e non "COMPLETATO".
+18. **Query: prima gli ID, poi i dati** — estrarre gli ID con i filtri e caricare i record a blocchi (`AsSplitQuery()` + predicato `OR` su ID) invece di `Include` su collection in un colpo solo; caricare le anagrafiche solo per le chiavi effettivamente usate nella run (`MaCustSupp` per gli `InvoicingCustomer` degli ordini estratti). Misure 21/10/2026 su ALLSPA: 67s → 11s e 232s → 3,8s.
 
 ## Mappa Proprietà File
 | Directory | Proprietario | Note |
@@ -156,6 +183,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 | `Common/CrashLogger.cs` | **Resta nel WinForms** (referenzia WinForms + AppConfig) |
 | `Forms/` | Solo UI WinForms; niente business logic |
 | `Config/` | `AppConfig` — unica fonte verità per settings del WinForms (poi `SyncToLibrary()`) |
+| `tools/` | Harness di verifica fuori app (es. `CreazioneOrdiniSmoke`) — solo DB di test |
 | `MigrazioneVb_Csharp.txt` | Log migrazione — solo riferimento |
 
 ## Task Comuni
@@ -167,8 +195,9 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 
 ### Aggiungere nuovo workflow
 1. Crea servizio in `Orders/` o `Invoicing/`
-2. Aggiungi pulsante + handler in `FLogin` seguendo pattern esistente (`EseguiOperazione` + `ProgressCallbacks`)
-3. Aggiungi form filtri se serve (pattern `FAskFiltriOrdini`)
+2. Log e progress solo tramite `LogDiagnostica` + `LogDiagnostica.Scarica(...)` nel `finally` (convenzione 16); callback raccolti in `ProgressCallbacks`
+3. Aggiungi pulsante + handler in `FLogin` seguendo il pattern `EseguiOperazione` (che passa già la `CancellationTokenSource` della run e gestisce "INTERROTTO")
+4. Aggiungi form filtri se serve (pattern `FAskFiltriOrdini`, DTO che implementa `ILogFiltri`)
 
 ### Modificare logica date/quantità
 - **Toccare solo** `CurOrdRowCalculations.cs` o costruttori `CurOrdRow`
@@ -189,4 +218,4 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 ## Riferimenti
 - `MigrazioneVb_Csharp.txt` — checklist riassuntiva migrazione
 - `copia.ps1` — script copia model (solo entità, NON DbContext)
-- `TODO.md` — promemoria sessione di revisione, fix già applicate e verifica manuale da fare
+- `TODO.md` — solo lavoro aperto: verifica manuale, punti noti da decidere, fasi residue del sito
