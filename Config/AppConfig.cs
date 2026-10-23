@@ -174,24 +174,26 @@ namespace FatturazioneContratti.Config
             });
         }
 
-        // DTO privato: esiste solo qui dentro per far felice JsonSerializer, nessuno fuori lo vede
+        // DTO privato: esiste solo qui dentro per far felice JsonSerializer, nessuno fuori lo vede.
+        // Le stringhe sono nullable: un JSON vecchio/parziale può ometterle e il loader applica
+        // i default con `??` (vedi Load). Dichiararle non-nullable sarebbe una bugia.
         private class ConfigData
         {
-            public string SqlServer { get; set; }
-            public string UserId { get; set; }
-            public string Password { get; set; }
+            public string? SqlServer { get; set; }
+            public string? UserId { get; set; }
+            public string? Password { get; set; }
             public int LoginId { get; set; }
             public bool IsDbUno { get; set; }
             public bool IsTestDb { get; set; }
             public bool IsDebugging { get; set; }
-            public string DatabaseUno { get; set; }
-            public string DatabaseSpa { get; set; }
-            public string TmpDatabaseUno { get; set; }
-            public string TmpDatabaseSpa { get; set; }
-            public string Path { get; set; }
-            public string FoxPath { get; set; }
-            public string LastLogPath { get; set; }
-            public string PathPaghe { get; set; }
+            public string? DatabaseUno { get; set; }
+            public string? DatabaseSpa { get; set; }
+            public string? TmpDatabaseUno { get; set; }
+            public string? TmpDatabaseSpa { get; set; }
+            public string? Path { get; set; }
+            public string? FoxPath { get; set; }
+            public string? LastLogPath { get; set; }
+            public string? PathPaghe { get; set; }
             public int? LogMode { get; set; }
         }
         // UTILITY

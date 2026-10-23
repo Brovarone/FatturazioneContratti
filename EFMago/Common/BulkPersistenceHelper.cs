@@ -110,7 +110,7 @@ namespace FatturazioneContratti.Common
             string tableName,
             BulkOperation operation,
             string stepDescription = "",
-            StringBuilder logBuilder = null,
+            StringBuilder? logBuilder = null,
             CancellationToken token = default) where T : class
         {
             if (entityList == null || entityList.Count == 0) return;

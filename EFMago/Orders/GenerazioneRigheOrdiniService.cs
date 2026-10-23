@@ -29,8 +29,8 @@ namespace FatturazioneContratti.Orders
         {
             FiltriOrdini filtri = options.Filtri;
             int dimensioneBlocco = options.DimensioneBlocco;
-            Action<string, LogTarget> logMessage = options.LogMessage;
-            Action<string> updateStatus = options.UpdateStatus;
+            Action<string, LogTarget>? logMessage = options.LogMessage;
+            Action<string>? updateStatus = options.UpdateStatus;
             ProgressCallbacks? progress1 = options.ProgressBlocchi;
             ProgressCallbacks? progress2 = options.ProgressOrdini;
 
@@ -413,7 +413,7 @@ namespace FatturazioneContratti.Orders
         /// Innesca automaticamente l'isolamento del record corrotto tramite scansione atomica.
         /// </exception>
         /// <exception cref="DbException">Rilanciata in caso di errori strutturali o di timeout lato SQL Server.</exception>
-        private static List<MaSaleOrd> LoadOrdersChunkByOrIn(FattureContext context, int[] ids, bool isDebugMode, Action<string> logMessage = null)
+        private static List<MaSaleOrd> LoadOrdersChunkByOrIn(FattureContext context, int[] ids, bool isDebugMode, Action<string>? logMessage = null)
         {
             if (ids == null || ids.Length == 0) return new List<MaSaleOrd>();
 
@@ -506,7 +506,7 @@ namespace FatturazioneContratti.Orders
             FattureContext context,
             int[] ids,
             Func<FattureContext, IQueryable<MaSaleOrd>> queryBuilder,
-            Action<string> logMessage)
+            Action<string>? logMessage)
         {
             foreach (var singoloId in ids)
             {
@@ -998,8 +998,11 @@ namespace FatturazioneContratti.Orders
             /// <summary>Token di interruzione utente, controllato ai confini di ordine/contratto.</summary>
             public CancellationToken Token { get; } = token;
 
-            public MaSaleOrdDetails PrototipoRiga { get; private set; }
-            public DefaultVenditeIva Default { get; private set; }
+            /// <summary>Prototipo riga con i default Fluent API (MA_SaleOrdDetails), impostato da <see cref="Inizializza"/>.</summary>
+            public MaSaleOrdDetails PrototipoRiga { get; private set; } = null!;
+
+            /// <summary>Default vendite/IVA della run, impostati da <see cref="Inizializza"/>.</summary>
+            public DefaultVenditeIva Default { get; private set; } = null!;
 
             public StringBuilder BulkMessage { get; } = new StringBuilder();
             public StringBuilder Errori { get; } = new StringBuilder();

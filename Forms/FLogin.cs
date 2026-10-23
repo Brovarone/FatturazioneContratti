@@ -16,8 +16,10 @@ namespace FatturazioneContratti.Forms
     {
         private const string AdminPassword = "123456";
         // campi nella classe FLogin
-        private UiProgress _progressMain;
-        private UiProgress _progressSub;
+        // Assegnati in FLogin_Load, prima che qualsiasi workflow possa partire: il form non
+        // viene mostrato finché Load non è finito, quindi a runtime non sono mai null.
+        private UiProgress _progressMain = null!;
+        private UiProgress _progressSub = null!;
         //private UiProgress? _progressSubChild;
 
         // nuovi campi per il logging su file
@@ -646,7 +648,9 @@ namespace FatturazioneContratti.Forms
         }
 
         //  --- Controlli da bloccare durante un'elaborazione. Adatta i nomi a quelli reali della tua form.  --- 
-        private Control[] _controlliDaBloccare;
+        // Popolato da InizializzaControlliBloccabili() in FLogin_Load: vuoto finché non è stato
+        // eseguito, così un eventuale uso precoce blocca zero controlli invece di crashing.
+        private Control[] _controlliDaBloccare = Array.Empty<Control>();
         private volatile bool _inElaborazione;
 
         /// <summary>CTS della run in corso: creata in EseguiOperazione, annullata da "Interrompi".</summary>

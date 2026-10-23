@@ -14,7 +14,8 @@ namespace FatturazioneContratti.Invoicing
         public double? PercIva { get; set; }
         public string Commessa { get; set; } = string.Empty;
         public string CdC { get; set; } = string.Empty;
-        public CurFatt Parent { get; set; }
+        /// <summary>Testata di fattura a cui la riga appartiene (back-reference), assegnata alla costruzione.</summary>
+        public required CurFatt Parent { get; set; }
         public string ContrattoFox { get; set; } = string.Empty;
         public string CodiceIntegra { get; set; } = string.Empty;
         public double NrCanoni { get; set; }

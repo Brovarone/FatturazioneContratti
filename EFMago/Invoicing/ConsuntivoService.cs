@@ -5,7 +5,6 @@ using FatturazioneContratti.Orders;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Text;
 
@@ -106,7 +105,7 @@ namespace FatturazioneContratti.Invoicing
         };
 
         public static string TrascodificaServizioAggiuntivo(string tipoEvento) =>
-            MappingsEventoIntegra.TryGetValue(tipoEvento ?? string.Empty, out string val) ? val : string.Empty;
+            MappingsEventoIntegra.TryGetValue(tipoEvento ?? string.Empty, out string? val) ? val : string.Empty;
 
         public static string TranscodificaEventoIntegra(string servizioMago)
         {
@@ -120,8 +119,8 @@ namespace FatturazioneContratti.Invoicing
 
         public bool ControllaFlussoIntegra(
             FiltriOrdiniConsuntivo filtri,
-            Action<string, LogTarget> logMessage = null,
-            Action<string> updateStatus = null,
+            Action<string, LogTarget>? logMessage = null,
+            Action<string>? updateStatus = null,
             ProgressCallbacks? progress1 = null,
             ProgressCallbacks? progress2 = null,
             CancellationToken token = default)
@@ -132,10 +131,6 @@ namespace FatturazioneContratti.Invoicing
             var eventoErrorList = new List<string>();
             int associati = 0;   // interventi agganciati a una riga contratto con esito positivo
             int chiaviRicalcolate = 0; // chiavi fattura cambiate da Riassegna (riferimento da riallineare)
-
-            // Tempo delle fasi: dal 21/10/2026 le run via VPN sono lente e il log deve
-            // dire da solo dove se ne va il tempo (estrazione, salvataggio, bulk).
-            var cronometro = Stopwatch.StartNew();
 
             try
             {
@@ -218,7 +213,7 @@ namespace FatturazioneContratti.Invoicing
                 var distintePerCodice = allDistinte.ToLookup(x => x.CodIntegra, StringComparer.OrdinalIgnoreCase);
 
                 LogDiagnostica.Informativo(logMessage,
-                    $"Interventi estratti: {allInterventi.Count} | caricamento: {cronometro.Elapsed.TotalSeconds:0.0}s");
+                    $"Interventi estratti: {allInterventi.Count}");
 
                 // Progress a blocchi da 100 record (stessa logica di GenerazioneRigheOrdiniService):
                 // barra grande = blocchi, barra piccola = record del blocco corrente.
@@ -428,8 +423,8 @@ namespace FatturazioneContratti.Invoicing
         #region Genera Fatture Consuntivo
         public bool GeneraFattureConsuntivo(
             FiltriOrdiniConsuntivo filtri,
-            Action<string, LogTarget> logMessage = null,
-            Action<string> updateStatus = null,
+            Action<string, LogTarget>? logMessage = null,
+            Action<string>? updateStatus = null,
             ProgressCallbacks? progress1 = null,
             ProgressCallbacks? progress2 = null,
             CancellationToken token = default)
@@ -441,10 +436,6 @@ namespace FatturazioneContratti.Invoicing
             var avvisiCessati = new List<string>();
             int contrattiCessatiConInterventi = 0;
             int interventiSuContrattiCessati = 0;
-
-            // Tempo delle fasi (vedi ControllaFlussoIntegra): il log deve dire da solo
-            // dove se ne va il tempo quando la run passa dalla VPN.
-            var cronometro = Stopwatch.StartNew();
 
             try
             {
@@ -528,7 +519,13 @@ namespace FatturazioneContratti.Invoicing
                     .Where(o => aOrdini.Contains(o.SaleOrdId))
                     // Filtro singolo ordine (FiltriOrdiniConsuntivo.SingoloOrdine/NrOrdine)
                     .Where(o => !soloOrdine || o.InternalOrdNo == filtri.NrOrdine)
-                    .OrderBy(o => o.InvoicingCustomer)
+                    // Ordinamento per lo STESSO codice cliente usato da Break/CurFatt: con
+                    // InvoicingCustomer vuoto si ordina per Customer, così i gruppi della stessa
+                    // fattura restano adiacenti. Espressione traducibile in SQL (niente
+                    // IsNullOrWhiteSpace): Trim() -> LTRIM(RTRIM(...)) = N''.
+                    .OrderBy(o => o.InvoicingCustomer == null || o.InvoicingCustomer.Trim() == string.Empty
+                        ? o.Customer
+                        : o.InvoicingCustomer)
                     .ThenBy(o => o.ContractCode)
                     .ThenBy(o => o.Payment)
                     .ThenBy(o => o.Carrier1)
@@ -541,8 +538,7 @@ namespace FatturazioneContratti.Invoicing
                 // Conteggi della run: interventi estratti, ordini distinti ricavati dagli
                 // interventi e ordini effettivamente caricati da MA_SaleOrd.
                 LogDiagnostica.Informativo(logMessage,
-                    $"Interventi estratti: {interventiList.Count} | Ordini distinti: {aOrdini.Length} | Ordini caricati: {ordiniList.Count}" +
-                    $" | caricamento: {cronometro.Elapsed.TotalSeconds:0.0}s");
+                    $"Interventi estratti: {interventiList.Count} | Ordini distinti: {aOrdini.Length} | Ordini caricati: {ordiniList.Count}");
 
                 // Discrepanza = intervento che punta a un ordine assente in MA_SaleOrd.
                 // Col filtro singolo ordine la differenza è voluta (si carica un ordine solo).
@@ -591,7 +587,7 @@ namespace FatturazioneContratti.Invoicing
                 // VPN la ToList intera era la query morta in timeout a 180s (21/10/2026).
                 // Con il filtro scendono a poche decine di righe: stesso esito, rete ridotta.
                 var codiciClientiNecessari = ordiniList
-                    .Select(o => o.InvoicingCustomer)
+                    .Select(o => CurFatt.CodiceClienteFatturazione(o))
                     .Where(wo => !string.IsNullOrWhiteSpace(wo))
                     .Distinct()
                     .ToArray();
@@ -670,9 +666,23 @@ namespace FatturazioneContratti.Invoicing
                     // Criteri di Rottura e accorpamento fattura
                     if (Break(o, saleDoc, cFattura.Cliente, paramSaleOrd))
                     {
+                        // Codice cliente di fatturazione: InvoicingCustomer e, se vuoto, il Customer
+                        // dell'ordine (regola in CurFatt.CodiceClienteFatturazione).
+                        string codiceClienteOrdine = CurFatt.CodiceClienteFatturazione(o);
+                        var clienteOrdine = clienti.FirstOrDefault(w => w.CustSupp == codiceClienteOrdine);
+
+                        // Se l'anagrafica non c'è è un buco dati, non una condizione normale: lo si
+                        // segnala come avviso (sempre visibile su UI e file) e si prosegue coi
+                        // fallback di sempre (accTpl EU, campi banca vuoti).
+                        if (clienteOrdine == null)
+                            LogDiagnostica.Avviso(logMessage,
+                                $"Ordine {o.InternalOrdNo}: cliente '{codiceClienteOrdine}' non trovato in anagrafica " +
+                                $"(CustSuppType 3211264){(string.IsNullOrWhiteSpace(o.InvoicingCustomer) ? " [usato Customer: InvoicingCustomer vuoto]" : string.Empty)}. " +
+                                "Fattura generata senza accTpl/campi banca del cliente.");
+
                         cFattura = new CurFatt(o)
                         {
-                            Cliente = clienti.FirstOrDefault(w => w.CustSupp == o.InvoicingCustomer),
+                            Cliente = clienteOrdine!,
                             DataFattura = filtri.DataFattura
                         };
                         if ((cFattura.PercIva ?? 0) == 0) cFattura.PercIva = dDefPercIva;
@@ -780,6 +790,15 @@ namespace FatturazioneContratti.Invoicing
                                         var taxRow = codiciIva.FirstOrDefault(tax => tax.TaxCode == cFattRow.CodIva);
                                         cFattRow.PercIva = Math.Round((double)(taxRow?.Perc ?? (cFattura.PercIva ?? 0)), DomainConstants.DecimaliPercentuale);
 
+                                        // Codice contratto da riportare sulla riga: quello della distinta
+                                        // (coincide con i.Contratto degli interventi associati). Fallback
+                                        // sull'intervento e poi sulla testa contratto.
+                                        string? codiceContratto = d.CodIntegra;
+                                        if (string.IsNullOrWhiteSpace(codiceContratto))
+                                            codiceContratto = interventiPeriodo.FirstOrDefault()?.Contratto;
+                                        if (string.IsNullOrWhiteSpace(codiceContratto))
+                                            codiceContratto = c.CodIntegra;
+
                                         // STEP 1 e 2: Descrizioni di testata
                                         if (!bWritedHeadDescription)
                                         {
@@ -832,7 +851,9 @@ namespace FatturazioneContratti.Invoicing
                                             TotalAmount = total,
                                             AllNrCanoni = (int)qty,
                                             Invoiced = "0",
-                                            Notes = StringHelpers.SubstringSafe(c.Nota, 32),
+                                            // Codice contratto Integra della riga di servizio, non la nota
+                                            // di testa del contratto (in VB era c.Nota troncata a 32).
+                                            Notes = StringHelpers.SubstringSafe(codiceContratto, 32),
                                             Packing = chiaveFattura,
                                             CustSupp = cFattura.CodCliente,
                                             CustSuppType = 3211264,
@@ -886,10 +907,10 @@ namespace FatturazioneContratti.Invoicing
                                 InstallmStartDate = cFattura.DataFattura,
                                 PostingDate = cFattura.DataFattura,
                                 TaxJournal = RegIvaPosticipate,
-                                CustomerBank = cFattura.Cliente?.CustSuppBank,
-                                CompanyCa = cFattura.Cliente?.CompanyCa,
-                                CompanyPymtCa = cFattura.Cliente?.CustomerCompanyCa,
-                                CompanyBank = cFattura.Cliente?.CompanyBank,
+                                CustomerBank = cFattura.Cliente?.CustSuppBank ?? string.Empty,
+                                CompanyCa = cFattura.Cliente?.CompanyCa ?? string.Empty,
+                                CompanyPymtCa = cFattura.Cliente?.CustomerCompanyCa ?? string.Empty,
+                                CompanyBank = cFattura.Cliente?.CompanyBank ?? string.Empty,
                                 InvoiceFollows = "0",
                                 EidocumentType = 22151169, // TD01
                                 Area = cFattura.Area,
@@ -1014,7 +1035,7 @@ namespace FatturazioneContratti.Invoicing
                     if (!esito) return false;
 
                     LogDiagnostica.Informativo(logMessage,
-                        $"Fatture generate: {efMaSaleDoc.Count} | tempo totale: {cronometro.Elapsed.TotalSeconds:0.0}s");
+                        $"Fatture generate: {efMaSaleDoc.Count}");
                 }
 
                 return true;
@@ -1121,6 +1142,7 @@ namespace FatturazioneContratti.Invoicing
         /// PIANTONI, …) e il mese della run. Viene scritta sull'intervento quando lo si
         /// associa all'ordine e riportata sulla riga fattura in <c>Packing</c>: la chiave
         /// non cambia quando Mago copia fattura → proforma → fattura.
+        /// Resta sempre ≤32 caratteri: se il formato leggibile sfora, passa al compatto base36.
         /// </summary>
         private static string CostruisciChiaveFattura(
             int idOrdine,
@@ -1132,8 +1154,38 @@ namespace FatturazioneContratti.Invoicing
             string evento = TranscodificaEventoIntegra(servizio);
             if (string.IsNullOrWhiteSpace(evento))
                 evento = servizio ?? string.Empty;
+            evento = evento.Trim().ToUpperInvariant();
 
-            return $"{idOrdine}|{lineaDistinta}|{lineaContratto}|{evento.Trim().ToUpperInvariant()}|{dataRiferimento:yyyyMM}";
+            // Formato leggibile: nella pratica sta largamente dentro i 32 char
+            // (es. 7553|1|2|INT|202609). Se però l'id ordine cresce o il servizio
+            // non è mappato ed è lungo, si passa al formato compatto base36:
+            // la chiave deve stare SEMPRE in varchar(32).
+            string chiave = $"{idOrdine}|{lineaDistinta}|{lineaContratto}|{evento}|{dataRiferimento:yyyyMM}";
+            if (chiave.Length <= 32)
+                return chiave;
+
+            string eventoBreve = evento.Length <= 4 ? evento : evento.Substring(0, 4);
+            return $"{ToBase36(idOrdine)}|{ToBase36(lineaDistinta)}|{ToBase36(lineaContratto)}|{eventoBreve}|{ToBase36(dataRiferimento.Year * 100 + dataRiferimento.Month)}";
+        }
+
+        /// <summary>Base36 maiuscolo (0-9, A-Z) per compattare i numeri della chiave.</summary>
+        private static string ToBase36(long value)
+        {
+            const string cifre = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+            if (value == 0) return "0";
+
+            bool negativo = value < 0;
+            if (negativo) value = -value;
+
+            var sb = new StringBuilder();
+            while (value > 0)
+            {
+                sb.Insert(0, cifre[(int)(value % 36)]);
+                value /= 36;
+            }
+
+            return negativo ? "-" + sb : sb.ToString();
         }
 
         /// <summary>
@@ -1153,11 +1205,11 @@ namespace FatturazioneContratti.Invoicing
             return string.Equals(distinta.Filiale.Trim(), intervento.Filiale.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
-        public static bool Break(MaSaleOrd ordine, MaSaleDoc testaFattura, MaCustSupp customer, MaSalesOrdParameters param)
+        public static bool Break(MaSaleOrd ordine, MaSaleDoc testaFattura, MaCustSupp? customer, MaSalesOrdParameters param)
         {
             var options = customer?.MaCustSuppCustomerOptions ?? new MaCustSuppCustomerOptions();
 
-            if (testaFattura.CustSupp != ordine.InvoicingCustomer ||
+            if (testaFattura.CustSupp != CurFatt.CodiceClienteFatturazione(ordine) ||
                 testaFattura.Payment != ordine.Payment ||
                 testaFattura.Currency != ordine.Currency ||
                 testaFattura.Salesperson != ordine.Salesperson ||
@@ -1225,15 +1277,15 @@ namespace FatturazioneContratti.Invoicing
 
         private class MiniDistinta
         {
-            public string NrOrdine { get; set; }
-            public string Filiale { get; set; }
+            public required string NrOrdine { get; set; }
+            public required string Filiale { get; set; }
             public short? Priorita { get; set; }   // <-- aggiunta
-            public string CodIntegra { get; set; }
+            public required string CodIntegra { get; set; }
             public DateTime DataCessazione { get; set; }
             public DateTime DataScadenzaFissa { get; set; }
-            public ICollection<AllordCliContrattoDistintaServAgg> AllordCliContrattoDistintaServAgg { get; set; }
-            public AlltipoRigaServizio AlltipoRigaServizio { get; set; }
-            public String Servizio { get; set; }
+            public required ICollection<AllordCliContrattoDistintaServAgg> AllordCliContrattoDistintaServAgg { get; set; }
+            public required AlltipoRigaServizio AlltipoRigaServizio { get; set; }
+            public required String Servizio { get; set; }
         }
 
         #endregion

@@ -53,9 +53,12 @@ namespace FatturazioneContratti.Orders
         public CurOrd(MaSaleOrd o) : this()
         {
             SaleOrdId = o.SaleOrdId;
-            LastLine = o.MaSaleOrdDetails.Count != 0 ? o.MaSaleOrdDetails.Max(m => m.Line) : 0;
-            LastPosition = o.MaSaleOrdDetails.Count != 0 ? o.MaSaleOrdDetails.Max(m => m.Position) : 0;
-            LastSubId = (int)(o.MaSaleOrdDetails.Count != 0 ? o.MaSaleOrdDetails.Max(m => m.SubId) : 0);
+            // Senza righe di dettaglio i tre contatori devono valere 0 (i default CLR del
+            // costruttore): Max su sequenza vuota lancia per i tipi non nullable, quindi si
+            // passa dall'overload nullable e si riporta null a 0. SubId è già int? a modello.
+            LastLine = o.MaSaleOrdDetails.Max(m => (int?)m.Line) ?? 0;
+            LastPosition = o.MaSaleOrdDetails.Max(m => (int?)m.Position) ?? 0;
+            LastSubId = o.MaSaleOrdDetails.Max(m => m.SubId) ?? 0;
             CurrentLastLine = LastLine;
             CurrentLastPosition = LastPosition;
             CurrentLastSubId = LastSubId;

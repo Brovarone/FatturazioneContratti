@@ -21,7 +21,9 @@ namespace FatturazioneContratti.Common
         /// </summary>
         public static T CloneFromPrototype<T>(this T prototipo) where T : class, new()
         {
-            if (prototipo == null) return null;
+            // Clonare un prototipo nullo è un errore di programmazione, non un caso da
+            // propagare: meglio un'eccezione netta di un null silenzioso a valle.
+            ArgumentNullException.ThrowIfNull(prototipo);
 
             T nuovaIstanza = new T();
 
@@ -34,7 +36,9 @@ namespace FatturazioneContratti.Common
             {
                 if (prop.CanRead && prop.CanWrite)
                 {
-                    object value = prop.GetValue(prototipo);
+                    // GetValue torna object?: è il valore della proprietà, può essere null
+                    // (colonne NULL dell'ERP) e va copiato così com'è.
+                    object? value = prop.GetValue(prototipo);
                     prop.SetValue(nuovaIstanza, value);
                 }
             }

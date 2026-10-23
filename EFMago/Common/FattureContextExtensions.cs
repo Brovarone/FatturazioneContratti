@@ -49,7 +49,8 @@ namespace FatturazioneContratti.Common
                         var pi = prop.PropertyInfo;
                         if (pi == null || !pi.CanWrite) continue;
 
-                        object value = prop.GetDefaultValue();
+                        // GetDefaultValue torna object?: null significa "nessun default nativo".
+                        object? value = prop.GetDefaultValue();
 
                         // Se non c'è un default nativo, analizziamo la stringa HasDefaultValueSql dell'ERP Mago
                         if (value == null)
@@ -77,7 +78,7 @@ namespace FatturazioneContratti.Common
         /// <summary>
         /// Estrattore ultra-resiliente per i letterali SQL di Mago: ((0.00)) | ('0') | ('') | ('17991231')
         /// </summary>
-        private static object EstraiValoreDaSqlLiteral(string sql, Type targetType)
+        private static object? EstraiValoreDaSqlLiteral(string sql, Type targetType)
         {
             var s = sql.Trim();
             while (s.Length >= 2 && s[0] == '(' && s[s.Length - 1] == ')')

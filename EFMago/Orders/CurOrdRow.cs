@@ -81,7 +81,8 @@ namespace FatturazioneContratti.Orders
         public string CodIva { get; set; } = string.Empty;
         public double PercIva { get; set; }
         public string Contropartita { get; set; } = string.Empty;
-        public CurOrd Parent { get; set; }
+        /// <summary>Ordine di appartenenza (back-reference), assegnato alla costruzione dal flusso chiamante.</summary>
+        public required CurOrd Parent { get; set; }
         public string ContrattoFox { get; set; } = string.Empty;
         public string CodiceIntegra { get; set; } = string.Empty;
         public FatturazioneContratti.Common.TipologiaServizio TipologiaServizio { get; set; } = FatturazioneContratti.Common.TipologiaServizio.Canone;

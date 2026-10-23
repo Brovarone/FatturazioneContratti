@@ -29,8 +29,8 @@ namespace FatturazioneContratti.Orders
         public bool AdeguaIstatOrdine(
             FiltriOrdini filtri,
             int dimensioneBlocco = 100,
-            Action<string, LogTarget> logMessage = null,
-            Action<string> updateStatus = null,
+            Action<string, LogTarget>? logMessage = null,
+            Action<string>? updateStatus = null,
             ProgressCallbacks? progress1 = null,
             ProgressCallbacks? progress2 = null,
             CancellationToken token = default)
@@ -196,7 +196,8 @@ namespace FatturazioneContratti.Orders
 
                         debugging.AppendLine($"# R. :({sEx})");
 
-                        var cOrdRow = new CurOrdRow(c);
+                        // Parent non è usato dal flusso ISTAT, ma la riga appartiene comunque all'ordine corrente.
+                        var cOrdRow = new CurOrdRow(c) { Parent = cOrd };
                         cOrdRow.ValUnit = Math.Round(c.ValUnitIstat ?? 0, DomainConstants.DecimaliTasse);
                         if (cOrdRow.ValUnit <= 0)
                         {
