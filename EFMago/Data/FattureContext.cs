@@ -1074,6 +1074,14 @@ namespace EFMago.Models
                     .HasDefaultValueSql("((0))");
 
                 // AGGIUNTO DA ME
+                // Chiave del gruppo fatturato (ordine|linea|linea contratto|evento|mese),
+                // scritta da ControllaFlussoIntegra e riportata sulla riga fattura in Packing.
+                entity.Property(e => e.MChiaveFattura)
+                    .HasColumnName("MChiaveFattura")
+                    .HasMaxLength(32)
+                    .IsUnicode(false);
+
+                // AGGIUNTO DA ME
                 entity.HasOne(d => d.ALLAllordCliContrattoDistinta)
                     .WithMany(p => p.AllIntegraInterventi)
                     .HasForeignKey(p => p.Contratto)

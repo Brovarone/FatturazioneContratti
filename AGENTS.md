@@ -81,6 +81,7 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
   - **Regola cessazione**: si fattura se il contratto è attivo (`DataCessazione == DataNulla`) **oppure** se la cessazione è ≥ `Filtri.DataFattura` (ultimo mese utile). Non si fattura più solo per i contratti cessati (bug ereditato da `OrdiniConsuntivi.vb`). Se un contratto **è già cessato alla data fattura** ma ha interventi nel periodo: a video solo il riepilogo `[AVVISO] Trovati X interventi su Y contratti cessati`, dettaglio per ordine solo su file
   - `FiltriOrdiniConsuntivo.ProseguiAnomalie` ("Prosegui comunque"): prosegue con anomalie **non critiche** (contratti mancanti / eventi non associati); le anomalie critiche (duplicati) bloccano sempre
   - Performance: interventi/ordini con `AsSplitQuery()` (7 Include di collection → prodotto cartesiano, 67s → 11s), `MaCustSupp` caricati solo per gli `InvoicingCustomer` degli ordini estratti (36k righe/232s → 24 righe/3,8s), `progress2` a blocchi da 100 con `Finish` finale
+  - **Riferimento fattura**: `Integra_Interventi.MChiaveFattura` = `id ordine|linea servizio|linea contratto|evento|mese` (es. `7553|1|2|INT|202609`), generata in `ControllaFlussoIntegra` quando l'intervento viene associato all'ordine e **ricalcolata da `Riassegna`** (il log avvisa quante chiavi sono cambiate). La stessa stringa va sulla riga fattura in `MA_SaleDocDetail.Packing`: campo **standard** Mago, quindi Mago la copia in entrambi i sensi fattura↔proforma. Nessun `SaleDocId` viene memorizzato sugli interventi (cambierebbe a ogni copia): la vista `ALLVInterventiFattura` risolve il documento corrente per chiave, preferendo Fattura (3407874) a Proforma (3407888). Script DDL + vista: `sql/2026-10-22_Consuntivo_ChiaveFattura.sql` (da eseguire su ogni DB prima dell'avvio).
 - **AggiornamentoFattureService** — classe `static`, `UPDATE` SQL raw join `MA_SaleDocDetail` → `MA_SaleOrdDetails`, con `SqlConnection`/`SqlTransaction` ricevuti dal caller
   - Resta raw di proposito (l'`UPDATE ... FROM` su 3 tabelle è scomodo in EF), ma i valori sono presi dagli enum `MagoEnum` e il timestamp è unico per operazione
   - Unico residuo raw: i **nomi di tabella/colonna**, non tipizzati dal compilatore
@@ -171,6 +172,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 16. **Log: sempre via `LogDiagnostica`** — nei servizi non si passa mai `LogTarget` a mano (né `LogToUi`/`LogToFile`, che non esistono più). Errori/anomalie/rollback devono restare visibili pure con `LogMode = File`: usa `Errore`/`Avviso`, non `Informativo`. I filtri della run e le statistiche bulk vanno **solo su file**. Ogni nuovo workflow chiude con `LogDiagnostica.Scarica(...)` nel `finally`, altrimenti gli accumulatori non arrivano a nessuno.
 17. **Interruzione cooperativa** — i workflow ricevono `CancellationToken` e lo controllano ai confini naturali (ordine/contratto/intervento/chunk), mai dentro il ciclo bulk. Se il token arriva con transazione aperta: rollback esplicito e `throw` (non `return`), così l'esito resta "INTERROTTO" e non "COMPLETATO".
 18. **Query: prima gli ID, poi i dati** — estrarre gli ID con i filtri e caricare i record a blocchi (`AsSplitQuery()` + predicato `OR` su ID) invece di `Include` su collection in un colpo solo; caricare le anagrafiche solo per le chiavi effettivamente usate nella run (`MaCustSupp` per gli `InvoicingCustomer` degli ordini estratti). Misure 21/10/2026 su ALLSPA: 67s → 11s e 232s → 3,8s.
+19. **Mago non copia le colonne custom dei documenti** — nella duplicazione fattura↔proforma Mago si porta dietro solo i campi **standard** (verificato: `Packing` e `ReferenceDocNo`). Per un riferimento che deve sopravvivere alle copie usare un campo standard, non una colonna `ALL_*` aggiunta a mano. Il consuntivo usa `MA_SaleDocDetail.Packing` come carrier della chiave `MChiaveFattura`.
 
 ## Mappa Proprietà File
 | Directory | Proprietario | Note |
@@ -184,6 +186,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 | `Forms/` | Solo UI WinForms; niente business logic |
 | `Config/` | `AppConfig` — unica fonte verità per settings del WinForms (poi `SyncToLibrary()`) |
 | `tools/` | Harness di verifica fuori app (es. `CreazioneOrdiniSmoke`) — solo DB di test |
+| `sql/` | Script DDL/viste manuali da eseguire sui DB Mago (non automatici) |
 | `MigrazioneVb_Csharp.txt` | Log migrazione — solo riferimento |
 
 ## Task Comuni

@@ -46,6 +46,14 @@ namespace EFMago.Models
 		/// Riferimento Linea Contratto ( RifLine)
 		/// </summary>
 		public short? MLineaContratto { get; set; }
+		/// <summary>
+		/// Chiave tecnica del gruppo di fatturazione consuntivo:
+		/// id ordine|linea distinta|linea contratto|evento|mese.
+		/// Scritta da ControllaFlussoIntegra (e ricalcolata con Riassegna), poi
+		/// riportata sulla riga fattura in MA_SaleDocDetail.Packing: così il
+		/// riferimento sopravvive alle copie fattura/proforma.
+		/// </summary>
+		public string MChiaveFattura { get; set; }
 		public virtual AllordCliContrattoDistinta AllordCliContrattoDistinta { get; set; }
 		public virtual AllordCliContrattoDistinta ALLAllordCliContrattoDistinta { get; set; }
 		public virtual MaSaleOrd SaleOrd { get; set; }

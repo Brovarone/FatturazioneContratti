@@ -5,6 +5,22 @@ in git, le regole di progetto (log, consuntivo, performance) sono in `AGENTS.md`
 
 ---
 
+## 0. Riferimento fattura consuntivo (`MChiaveFattura` / `Packing`) — da eseguire e verificare
+
+- [ ] Eseguire `sql/2026-10-22_Consuntivo_ChiaveFattura.sql` su TMPSPA, poi su ALLSPA/DEMON
+      (colonna `Integra_Interventi.MChiaveFattura`, indici, vista `ALLVInterventiFattura`).
+      Senza la colonna l'app non può interrogare `IntegraInterventi`.
+- [ ] Dopo il DDL: re-scaffold in `ALLMigrazione` + `copia.ps1`, altrimenti la proprietà
+      `MChiaveFattura` aggiunta a mano in `EFMago/Data/Models/IntegraInterventi.cs` viene sovrascritta.
+- [ ] Run consuntivo su TMPSPA con Controllo + Fatturazione: ogni riga servizio deve avere
+      `Packing = <chiave>`, e gli interventi del periodo la stessa `MChiaveFattura`.
+- [ ] Giro proforma in Mago (fattura → proforma → fattura): la chiave deve restare su `Packing`
+      e la vista `ALLVInterventiFattura` deve passare da FATTURA a PROFORMA e ritorno.
+- [ ] `Riassegna`: verificare che ricalcoli la chiave e che il log segnali quante chiavi sono cambiate.
+- [ ] Verificare che `Packing` non venga azzerato da Mago al salvataggio/riapertura del documento.
+
+---
+
 ## 1. Verifica manuale su DB test (unico debito di verifica aperto)
 
 Nessun test automatico: da provare via UI con flag Test DB attivo.

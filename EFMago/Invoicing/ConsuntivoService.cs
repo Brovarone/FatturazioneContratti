@@ -131,6 +131,7 @@ namespace FatturazioneContratti.Invoicing
             var contrattoErrorList = new List<string>();
             var eventoErrorList = new List<string>();
             int associati = 0;   // interventi agganciati a una riga contratto con esito positivo
+            int chiaviRicalcolate = 0; // chiavi fattura cambiate da Riassegna (riferimento da riallineare)
 
             // Tempo delle fasi: dal 21/10/2026 le run via VPN sono lente e il log deve
             // dire da solo dove se ne va il tempo (estrazione, salvataggio, bulk).
@@ -259,10 +260,24 @@ namespace FatturazioneContratti.Invoicing
                         if (allEventi.Count == 1)
                         {
                             var row = allEventi.Single();
+                            string chiaveCalcolata = CostruisciChiaveFattura(
+                                row.IdOrdCli,
+                                row.RifLinea,
+                                row.RifRifLinea,
+                                row.Servizio,
+                                filtri.ToInterventiDate);
+
+                            // Riassegna ricrea anche la chiave: se l'intervento era già
+                            // agganciato a una fattura, il vecchio riferimento non è più
+                            // valido e va riallineato (lo segnaliamo a fine run).
+                            if (!string.IsNullOrWhiteSpace(i.MChiaveFattura) && i.MChiaveFattura != chiaveCalcolata)
+                                chiaviRicalcolate++;
+
                             i.MAssociato = "1";
                             i.MIdOrdCli = row.IdOrdCli;
                             i.MLineaContratto = row.RifRifLinea;
                             i.MLineaDistinta = row.RifLinea;
+                            i.MChiaveFattura = chiaveCalcolata;
                             i.TBModified = _now;
                             i.TBModifiedID = _loginId;
                             associati++;
@@ -313,6 +328,12 @@ namespace FatturazioneContratti.Invoicing
                 // e non si capiva mai quanti interventi erano stati agganciati.
                 LogDiagnostica.Informativo(logMessage,
                     $"Controllo flusso completato: {allInterventi.Count} interventi, {associati} associati, {anomalie} anomalie");
+
+                if (chiaviRicalcolate > 0)
+                {
+                    LogDiagnostica.Avviso(logMessage,
+                        $"Riassegna ha ricalcolato {chiaviRicalcolate} chiavi fattura: i riferimenti alle fatture già generate vanno verificati.");
+                }
 
                 if (anomalie != 0)
                 {
@@ -678,6 +699,11 @@ namespace FatturazioneContratti.Invoicing
                                     var periodFranchigia = (Periodo)(s.Periodicita ?? 0);
                                     var interventiEvento = d.IntegraInterventi.Where(w => string.Equals(w.TipoEvento, evento, StringComparison.OrdinalIgnoreCase)).ToList();
 
+                                    // Interventi che la riga conta davvero: quelli nella finestra di
+                                    // franchigia (per la maggior parte dei contratti = il mese).
+                                    // Sono anche quelli a cui va agganciata la chiave fattura.
+                                    var interventiPeriodo = new List<IntegraInterventi>();
+
                                     if (interventiEvento.Count != 0)
                                     {
                                         s.AnnoIntervento = filtri.ToInterventiDate.Year;
@@ -691,9 +717,11 @@ namespace FatturazioneContratti.Invoicing
                                         var dtaPeriodoFranchigiaFrom = GetDataPeriodoFranchigia(toDataMese, periodFranchigia, true);
                                         var dtaPeriodoFranchigiaTo = GetDataPeriodoFranchigia(toDataMese, periodFranchigia, false);
 
-                                        s.NrInterventiInFranchigia = interventiEvento
+                                        interventiPeriodo = interventiEvento
                                             .Where(wp => wp.InizioAllarme >= dtaPeriodoFranchigiaFrom && wp.InizioAllarme <= dtaPeriodoFranchigiaTo)
-                                            .Sum(q => q.Qta ?? 0);
+                                            .ToList();
+
+                                        s.NrInterventiInFranchigia = interventiPeriodo.Sum(q => q.Qta ?? 0);
 
                                         if (periodFranchigia == Periodo.Nessuno)
                                         {
@@ -710,6 +738,35 @@ namespace FatturazioneContratti.Invoicing
 
                                     if ((s.NrInterventiOltreFranchigia ?? 0) > 0 && cessazioneDopoFattura)
                                     {
+                                        // Chiave del gruppo fatturato: quella scritta al momento
+                                        // dell'associazione. Se manca (interventi associati prima di
+                                        // questa meccanica) viene ricostruita e riportata sugli
+                                        // interventi del periodo, così il riferimento resta coerente.
+                                        var chiaviPeriodo = interventiPeriodo
+                                            .Select(x => x.MChiaveFattura)
+                                            .Where(k => !string.IsNullOrWhiteSpace(k))
+                                            .Distinct()
+                                            .ToList();
+
+                                        string chiaveFattura = chiaviPeriodo.FirstOrDefault()
+                                            ?? CostruisciChiaveFattura(o.SaleOrdId, s.RifLinea, s.RifRifLinea, s.Servizio, filtri.ToInterventiDate);
+
+                                        if (chiaviPeriodo.Count > 1)
+                                        {
+                                            LogDiagnostica.Avviso(logMessage,
+                                                $"Ordine {o.InternalOrdNo}, servizio {s.Servizio}: {chiaviPeriodo.Count} chiavi fattura diverse nel periodo, uso '{chiaveFattura}'.");
+                                        }
+
+                                        foreach (var intervento in interventiPeriodo)
+                                        {
+                                            if (string.IsNullOrWhiteSpace(intervento.MChiaveFattura))
+                                            {
+                                                intervento.MChiaveFattura = chiaveFattura;
+                                                intervento.TBModified = _now;
+                                                intervento.TBModifiedID = _loginId;
+                                            }
+                                        }
+
                                         var cFattRow = new CurFattRow
                                         {
                                             Contropartita = string.IsNullOrWhiteSpace(s.MaItems?.SaleOffset) ? sDefContropartita : s.MaItems.SaleOffset,
@@ -776,6 +833,7 @@ namespace FatturazioneContratti.Invoicing
                                             AllNrCanoni = (int)qty,
                                             Invoiced = "0",
                                             Notes = StringHelpers.SubstringSafe(c.Nota, 32),
+                                            Packing = chiaveFattura,
                                             CustSupp = cFattura.CodCliente,
                                             CustSuppType = 3211264,
                                             DocumentDate = cFattura.DataFattura,
@@ -1052,6 +1110,30 @@ namespace FatturazioneContratti.Invoicing
                 TbcreatedId = _loginId,
                 TbmodifiedId = _loginId
             };
+        }
+
+        /// <summary>
+        /// Chiave tecnica del gruppo di fatturazione consuntivo:
+        /// <c>id ordine|linea distinta|linea contratto|evento|mese</c>.
+        /// lineaDistinta = rifLinea
+        /// lineaContratto = rifRifLinea
+        /// Identifica il singolo servizio (TipoEvento distingue INTERVENTI, ISPEZIONI,
+        /// PIANTONI, …) e il mese della run. Viene scritta sull'intervento quando lo si
+        /// associa all'ordine e riportata sulla riga fattura in <c>Packing</c>: la chiave
+        /// non cambia quando Mago copia fattura → proforma → fattura.
+        /// </summary>
+        private static string CostruisciChiaveFattura(
+            int idOrdine,
+            short lineaDistinta,
+            short lineaContratto,
+            string servizio,
+            DateTime dataRiferimento)
+        {
+            string evento = TranscodificaEventoIntegra(servizio);
+            if (string.IsNullOrWhiteSpace(evento))
+                evento = servizio ?? string.Empty;
+
+            return $"{idOrdine}|{lineaDistinta}|{lineaContratto}|{evento.Trim().ToUpperInvariant()}|{dataRiferimento:yyyyMM}";
         }
 
         /// <summary>
