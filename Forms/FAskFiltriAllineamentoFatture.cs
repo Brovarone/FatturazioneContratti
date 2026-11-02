@@ -27,7 +27,8 @@ namespace FatturazioneContratti.Forms
                 DataFattA = dtpA.Value.Date,
                 AllNumbers = allNumbers,
                 NrFirst = allNumbers ? string.Empty : txtNrFirst.Text.Trim(),
-                NrLast = allNumbers ? string.Empty : txtNrLast.Text.Trim()
+                NrLast = allNumbers ? string.Empty : txtNrLast.Text.Trim(),
+                SincronizzaFatturaElettronica = chkSincronizzaFE.Checked
             };
         }
 

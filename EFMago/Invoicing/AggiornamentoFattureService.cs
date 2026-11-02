@@ -1,9 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Text;
 using FatturazioneContratti.Common;
 using FatturazioneContratti.Data;
 using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 
 namespace FatturazioneContratti.Invoicing
 {
@@ -11,6 +14,9 @@ namespace FatturazioneContratti.Invoicing
     {
         /// <summary>
         /// Allinea date/nr canoni delle righe fattura da quelle della riga ordine.
+        /// Se <see cref="FiltriAllineamentoFatture.SincronizzaFatturaElettronica"/> è true,
+        /// esegue anche l'upsert dei dati fattura elettronica (AllordCliFattEle →
+        /// MaEiItdocAdditionalData).
         /// Il messaggio di esito viene loggato qui dentro (filtri ed esito come informativo,
         /// eccezione con stack come errore): il caller passa solo il delegato.
         /// </summary>
@@ -32,6 +38,7 @@ namespace FatturazioneContratti.Invoicing
             string sFromDate = filtri.DataFattDa.ToString("yyyyMMdd");
             string sToDate = filtri.DataFattA.ToString("yyyyMMdd");
 
+            // --- OPERAZIONE A: date/nr canoni ---
             var sb = new StringBuilder();
             sb.Append("UPDATE MA_SaleDocDetail SET ");
             sb.Append("ALL_CanoniDataI = Ord.ALL_CanoniDataI, ");
@@ -71,7 +78,18 @@ namespace FatturazioneContratti.Invoicing
                 int irows = cmd.ExecuteNonQuery();
                 LogDiagnostica.Informativo(logMessage, irows <= 0
                     ? "Nessun documento di vendita da aggiornare"
-                    : $"Adeguate {irows} righe.");
+                    : $"Adeguate {irows} righe canoni.");
+
+                // --- OPERAZIONE B: upsert dati fattura elettronica ---
+                if (filtri.SincronizzaFatturaElettronica)
+                {
+                    token.ThrowIfCancellationRequested();
+                    int feRows = UpsertDatiFatturaElettronica(connection, transaction, filtri, now, loginId, logMessage, token);
+                    LogDiagnostica.Informativo(logMessage, feRows <= 0
+                        ? "Nessun dato fattura elettronica da sincronizzare"
+                        : $"Sincronizzati {feRows} dati fattura elettronica.");
+                }
+
                 return true;
             }
             catch (OperationCanceledException)
@@ -85,6 +103,197 @@ namespace FatturazioneContratti.Invoicing
                 LogDiagnostica.Errore(logMessage, ex);
                 return false;
             }
+        }
+
+        private static int UpsertDatiFatturaElettronica(
+            SqlConnection connection,
+            SqlTransaction transaction,
+            FiltriAllineamentoFatture filtri,
+            DateTime now,
+            int loginId,
+            Action<string, LogTarget>? logMessage,
+            CancellationToken token)
+        {
+            // Chiavi delle righe fattura target: stessi filtri dell'operazione A, senza il
+            // vincolo ALL_CanoniDataI (si allineano anche righe già processate per i dati FE).
+            string sFromDate = filtri.DataFattDa.ToString("yyyyMMdd");
+            string sToDate = filtri.DataFattA.ToString("yyyyMMdd");
+
+            var righe = new List<(int SaleDocId, int SaleOrdId, int SaleOrdSubId, int SaleOrdPos)>();
+            using (var cmdChiavi = new SqlCommand(
+                @"SELECT DISTINCT Doc.SaleDocId, Doc.SaleOrdId, Doc.SaleOrdSubId, Doc.SaleOrdPos
+                  FROM MA_SaleDoc Testa
+                  INNER JOIN MA_SaleDocDetail Doc ON Testa.SaleDocId = Doc.SaleDocId
+                  WHERE (Doc.LineType = @LineTypeMerce OR Doc.LineType = @LineTypeServizio)
+                    AND (Testa.DocumentType = @DocFattura OR Testa.DocumentType = @DocFatturaAcc OR Testa.DocumentType = @DocNotaCredito)
+                    AND (Testa.DocumentDate >= @FromDate AND Testa.DocumentDate <= @ToDate)
+                    AND (@AllNumbers = 1 OR (@AllNumbers = 0 AND Testa.DocNo >= @NrFirst AND Testa.DocNo <= @NrLast))",
+                connection, transaction))
+            {
+                cmdChiavi.CommandTimeout = SqlTools.CommandTimeoutSeconds;
+                cmdChiavi.Parameters.Add("@LineTypeMerce", SqlDbType.Int).Value = (int)LineType.Merce;
+                cmdChiavi.Parameters.Add("@LineTypeServizio", SqlDbType.Int).Value = (int)LineType.Servizio;
+                cmdChiavi.Parameters.Add("@DocFattura", SqlDbType.Int).Value = (int)DocumentType.Fattura;
+                cmdChiavi.Parameters.Add("@DocFatturaAcc", SqlDbType.Int).Value = (int)DocumentType.FatturaAccompagnatoria;
+                cmdChiavi.Parameters.Add("@DocNotaCredito", SqlDbType.Int).Value = (int)DocumentType.NotaCredito;
+                cmdChiavi.Parameters.Add("@FromDate", SqlDbType.VarChar, 8).Value = sFromDate;
+                cmdChiavi.Parameters.Add("@ToDate", SqlDbType.VarChar, 8).Value = sToDate;
+                cmdChiavi.Parameters.Add("@AllNumbers", SqlDbType.Bit).Value = filtri.AllNumbers;
+                cmdChiavi.Parameters.Add("@NrFirst", SqlDbType.VarChar, 10).Value = filtri.NrFirst ?? string.Empty;
+                cmdChiavi.Parameters.Add("@NrLast", SqlDbType.VarChar, 10).Value = filtri.NrLast ?? string.Empty;
+
+                using var reader = cmdChiavi.ExecuteReader();
+                while (reader.Read())
+                {
+                    righe.Add((reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3)));
+                }
+            }
+
+            if (righe.Count == 0) return 0;
+
+            // Recupero AllordCliFattEle per gli ordini delle righe fattura (1 per ordine).
+            var saleOrdIds = righe.Select(r => r.SaleOrdId).Distinct().ToList();
+            var fattElePerOrdine = new Dictionary<int, EFMago.Models.AllordCliFattEle>();
+            var sbFe = new StringBuilder("SELECT * FROM ALLOrdCliFattEle WHERE IdOrdCli IN (");
+            for (int i = 0; i < saleOrdIds.Count; i++)
+            {
+                if (i > 0) sbFe.Append(", ");
+                sbFe.Append($"@fe{i}");
+            }
+            sbFe.Append(")");
+            using (var cmdFe = new SqlCommand(sbFe.ToString(), connection, transaction))
+            {
+                cmdFe.CommandTimeout = SqlTools.CommandTimeoutSeconds;
+                for (int i = 0; i < saleOrdIds.Count; i++)
+                    cmdFe.Parameters.Add($"@fe{i}", SqlDbType.Int).Value = saleOrdIds[i];
+                using var reader = cmdFe.ExecuteReader();
+                while (reader.Read())
+                {
+                    var fe = new EFMago.Models.AllordCliFattEle
+                    {
+                        IdOrdCli = reader.GetInt32(reader.GetOrdinal("IdOrdCli")),
+                        F2_1_1_5_4 = GetStringOrNull(reader, "F2_1_1_5_4"),
+                        F2_1_1_11 = GetStringOrNull(reader, "F2_1_1_11"),
+                        F2_1_2_6 = GetStringOrNull(reader, "F2_1_2_6"),
+                        F2_1_2_7 = GetStringOrNull(reader, "F2_1_2_7"),
+                        F2_1_3_6 = GetStringOrNull(reader, "F2_1_3_6"),
+                        F2_1_3_7 = GetStringOrNull(reader, "F2_1_3_7"),
+                        F2_1_4_6 = GetStringOrNull(reader, "F2_1_4_6"),
+                        F2_1_4_7 = GetStringOrNull(reader, "F2_1_4_7"),
+                        F2_1_5_6 = GetStringOrNull(reader, "F2_1_5_6"),
+                        F2_1_5_7 = GetStringOrNull(reader, "F2_1_5_7"),
+                    };
+                    fattElePerOrdine[fe.IdOrdCli] = fe;
+                }
+            }
+
+            // Costruisco le righe da upsert: per ogni riga fattura e per ogni campo FE valorizzato.
+            // DocSubId = 0, SubLine = 0, Line = 1 (o MAX(Line)+1 per quel DocId se esistono già righe).
+            var docIds = righe.Select(r => r.SaleDocId).Distinct().ToList();
+            var lineEsistenti = new Dictionary<int, int>(); // DocId -> MAX(Line)
+            using (var cmdLine = new SqlCommand(
+                $"SELECT DocID, ISNULL(MAX(Line), 0) FROM MA_EI_ITDocAdditionalData WHERE DocID IN ({string.Join(",", docIds.Select((_, i) => $"@d{i}"))}) GROUP BY DocID",
+                connection, transaction))
+            {
+                cmdLine.CommandTimeout = SqlTools.CommandTimeoutSeconds;
+                for (int i = 0; i < docIds.Count; i++)
+                    cmdLine.Parameters.Add($"@d{i}", SqlDbType.Int).Value = docIds[i];
+                using var reader = cmdLine.ExecuteReader();
+                while (reader.Read())
+                    lineEsistenti[reader.GetInt32(0)] = reader.GetInt32(1);
+            }
+
+            var prossimaLine = new Dictionary<int, int>(lineEsistenti);
+            var righeDaScrivere = new List<(int DocId, int Line, string FieldName, string FieldValue)>();
+
+            var campiFe = new List<(string PropName, string FieldName)>
+            {
+                ("F2_1_1_5_4", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiGeneraliDocumento.DatiRitenuta.CausalePagamento"),
+                ("F2_1_1_11", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiGeneraliDocumento.Causale"),
+                ("F2_1_2_6", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiOrdineAcquisto.CodiceCUP"),
+                ("F2_1_2_7", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiOrdineAcquisto.CodiceCIG"),
+                ("F2_1_3_6", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiContratto.CodiceCUP"),
+                ("F2_1_3_7", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiContratto.CodiceCIG"),
+                ("F2_1_4_6", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiConvenzione.CodiceCUP"),
+                ("F2_1_4_7", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiConvenzione.CodiceCIG"),
+                ("F2_1_5_6", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiRicezione.CodiceCUP"),
+                ("F2_1_5_7", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiRicezione.CodiceCIG"),
+            };
+
+            foreach (var riga in righe)
+            {
+                if (!fattElePerOrdine.TryGetValue(riga.SaleOrdId, out var fe)) continue;
+
+                int line = prossimaLine.TryGetValue(riga.SaleDocId, out int l) ? l : 0;
+                if (line == 0) line = 1;
+                prossimaLine[riga.SaleDocId] = line + 1;
+
+                foreach (var campo in campiFe)
+                {
+                    var valore = fe.GetType().GetProperty(campo.PropName)?.GetValue(fe) as string;
+                    if (string.IsNullOrEmpty(valore)) continue;
+                    righeDaScrivere.Add((riga.SaleDocId, line, campo.FieldName, valore));
+                }
+            }
+
+            if (righeDaScrivere.Count == 0) return 0;
+
+            // Upsert: per ogni (DocId, 0, Line, 0, FieldName) esiste già → UPDATE, altrimenti INSERT.
+            int scritti = 0;
+            foreach (var r in righeDaScrivere)
+            {
+                token.ThrowIfCancellationRequested();
+
+                using var cmdCheck = new SqlCommand(
+                    "SELECT COUNT(*) FROM MA_EI_ITDocAdditionalData WHERE DocID = @DocId AND DocSubID = 0 AND Line = @Line AND SubLine = 0 AND FieldName = @FieldName",
+                    connection, transaction);
+                cmdCheck.CommandTimeout = SqlTools.CommandTimeoutSeconds;
+                cmdCheck.Parameters.Add("@DocId", SqlDbType.Int).Value = r.DocId;
+                cmdCheck.Parameters.Add("@Line", SqlDbType.Int).Value = r.Line;
+                cmdCheck.Parameters.Add("@FieldName", SqlDbType.VarChar, 256).Value = r.FieldName;
+
+                int esiste = (int)cmdCheck.ExecuteScalar();
+
+                if (esiste > 0)
+                {
+                    using var cmdUpd = new SqlCommand(
+                        "UPDATE MA_EI_ITDocAdditionalData SET FieldValue = @FieldValue, TBModified = @DataMod, TBModifiedID = @User WHERE DocID = @DocId AND DocSubID = 0 AND Line = @Line AND SubLine = 0 AND FieldName = @FieldName",
+                        connection, transaction);
+                    cmdUpd.CommandTimeout = SqlTools.CommandTimeoutSeconds;
+                    cmdUpd.Parameters.Add("@DocId", SqlDbType.Int).Value = r.DocId;
+                    cmdUpd.Parameters.Add("@Line", SqlDbType.Int).Value = r.Line;
+                    cmdUpd.Parameters.Add("@FieldName", SqlDbType.VarChar, 256).Value = r.FieldName;
+                    cmdUpd.Parameters.Add("@FieldValue", SqlDbType.VarChar, 256).Value = r.FieldValue;
+                    cmdUpd.Parameters.Add("@DataMod", SqlDbType.VarChar, 8).Value = now.ToString("yyyyMMdd");
+                    cmdUpd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
+                    cmdUpd.ExecuteNonQuery();
+                }
+                else
+                {
+                    using var cmdIns = new SqlCommand(
+                        "INSERT INTO MA_EI_ITDocAdditionalData (DocID, DocSubID, Line, SubLine, FieldName, FieldValue, TBCreated, TBCreatedID, TBModified, TBModifiedID) VALUES (@DocId, 0, @Line, 0, @FieldName, @FieldValue, GETDATE(), @User, GETDATE(), @User)",
+                        connection, transaction);
+                    cmdIns.CommandTimeout = SqlTools.CommandTimeoutSeconds;
+                    cmdIns.Parameters.Add("@DocId", SqlDbType.Int).Value = r.DocId;
+                    cmdIns.Parameters.Add("@Line", SqlDbType.Int).Value = r.Line;
+                    cmdIns.Parameters.Add("@FieldName", SqlDbType.VarChar, 256).Value = r.FieldName;
+                    cmdIns.Parameters.Add("@FieldValue", SqlDbType.VarChar, 256).Value = r.FieldValue;
+                    cmdIns.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
+                    cmdIns.ExecuteNonQuery();
+                }
+                scritti++;
+            }
+
+            return scritti;
+        }
+
+        private static string? GetStringOrNull(Microsoft.Data.SqlClient.SqlDataReader reader, string columnName)
+        {
+            int ordinal;
+            try { ordinal = reader.GetOrdinal(columnName); }
+            catch { return null; }
+            if (reader.IsDBNull(ordinal)) return null;
+            return reader.GetString(ordinal);
         }
     }
 }

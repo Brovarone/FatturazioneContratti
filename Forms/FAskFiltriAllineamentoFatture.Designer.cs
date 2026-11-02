@@ -88,7 +88,6 @@ namespace FatturazioneContratti.Forms
             grpNumeri.TabIndex = 4;
             grpNumeri.TabStop = false;
             grpNumeri.Text = "Numeri documento";
-            // 
             // radTuttiNumeri
             // 
             radTuttiNumeri.AutoSize = true;
@@ -155,14 +154,25 @@ namespace FatturazioneContratti.Forms
             txtNrLast.Size = new Size(111, 23);
             txtNrLast.TabIndex = 5;
             // 
+            // chkSincronizzaFE
+            // 
+            chkSincronizzaFE.AutoSize = true;
+            chkSincronizzaFE.Location = new Point(18, 238);
+            chkSincronizzaFE.Margin = new Padding(4, 3, 4, 3);
+            chkSincronizzaFE.Name = "chkSincronizzaFE";
+            chkSincronizzaFE.Size = new Size(267, 19);
+            chkSincronizzaFE.TabIndex = 5;
+            chkSincronizzaFE.Text = "Sincronizza anche dati fattura elettronica (AllordCliFattEle)";
+            chkSincronizzaFE.UseVisualStyleBackColor = true;
+            // 
             // btnOk
             // 
             btnOk.DialogResult = DialogResult.OK;
-            btnOk.Location = new Point(93, 237);
+            btnOk.Location = new Point(93, 270);
             btnOk.Margin = new Padding(4, 3, 4, 3);
             btnOk.Name = "btnOk";
             btnOk.Size = new Size(88, 30);
-            btnOk.TabIndex = 5;
+            btnOk.TabIndex = 6;
             btnOk.Text = "OK";
             btnOk.UseVisualStyleBackColor = true;
             btnOk.Click += BtnOk_Click;
@@ -170,11 +180,11 @@ namespace FatturazioneContratti.Forms
             // btnCancel
             // 
             btnCancel.DialogResult = DialogResult.Cancel;
-            btnCancel.Location = new Point(187, 237);
+            btnCancel.Location = new Point(187, 270);
             btnCancel.Margin = new Padding(4, 3, 4, 3);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(88, 30);
-            btnCancel.TabIndex = 6;
+            btnCancel.TabIndex = 7;
             btnCancel.Text = "Annulla";
             btnCancel.UseVisualStyleBackColor = true;
             // 
@@ -184,12 +194,13 @@ namespace FatturazioneContratti.Forms
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             CancelButton = btnCancel;
-            ClientSize = new Size(292, 283);
+            ClientSize = new Size(292, 320);
             Controls.Add(lblDa);
             Controls.Add(dtpDa);
             Controls.Add(lblA);
             Controls.Add(dtpA);
             Controls.Add(grpNumeri);
+            Controls.Add(chkSincronizzaFE);
             Controls.Add(btnOk);
             Controls.Add(btnCancel);
             FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -220,5 +231,6 @@ namespace FatturazioneContratti.Forms
         private System.Windows.Forms.TextBox txtNrLast;
         private System.Windows.Forms.Button btnOk;
         private System.Windows.Forms.Button btnCancel;
+        private System.Windows.Forms.CheckBox chkSincronizzaFE;
     }
 }

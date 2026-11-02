@@ -13,6 +13,12 @@ namespace FatturazioneContratti.Invoicing
         public string NrFirst { get; set; } = string.Empty;
         public string NrLast { get; set; } = string.Empty;
 
+        /// <summary>
+        /// Se true, oltre alle date canoni sincronizza anche i dati fattura elettronica
+        /// (tabella AllordCliFattEle → MaEiItdocAdditionalData).
+        /// </summary>
+        public bool SincronizzaFatturaElettronica { get; set; }
+
         public StringBuilder LogFiltri { get; set; } = new StringBuilder();
 
         public void CostruisciFiltriLog()
@@ -23,6 +29,9 @@ namespace FatturazioneContratti.Invoicing
             LogFiltri.AppendLine(AllNumbers
                 ? "Numeri documento: TUTTI"
                 : $"Numeri documento: dal {NrFirst} al {NrLast}");
+            LogFiltri.AppendLine(SincronizzaFatturaElettronica
+                ? "Sincronizzazione fattura elettronica: SÌ"
+                : "Sincronizzazione fattura elettronica: NO");
         }
     }
 }
