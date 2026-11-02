@@ -28,7 +28,7 @@ namespace FatturazioneContratti.Orders
     /// - righe: Line/SubId 1..N, Position = Line (convenzione Mago sulle righe semplici), InternalOrdNo
     ///   denormalizzato copiato dalla testata, Importi = round(qta * prezzo) e round(taxable * (100+iva)/100).
     /// </summary>
-    public class CreazioneOrdiniService(FattureContext context, int loginId)
+    public partial class CreazioneOrdiniService(FattureContext context, int loginId)
     {
         private readonly FattureContext _context = context;
         private readonly int _loginId = loginId;
@@ -43,6 +43,16 @@ namespace FatturazioneContratti.Orders
         private const string ValutaDefault = "EUR";        // 732/732 ordini reali
         private const string RegistroIvaDefault = "VEN";   // registro più frequente nei dati reali (516/732)
 
+        /// <summary>Divisione "Vigilanza": gli ordini/contratti del sito sono sempre di questa divisione.</summary>
+        private const int DivisioneVigilanza = 1377239042;
+
+        /// <summary>
+        /// Modello contratto "SPA": è il valore scritto in ALLOrdCliAcc.ModelloContratto da
+        /// tutti i 732 contratti reali (1229717507). Il default Fluent di Mago è 1229717504,
+        /// che è un altro modello: qui si forza quello aziendale.
+        /// </summary>
+        private const int ModelloContrattoSpa = 1229717507;
+
         /// <summary>
         /// Crea un ordine cliente completo (testata + righe + satelliti) e ne restituisce l'esito.
         /// In caso di errore di validazione o di scrittura restituisce null: il dettaglio è già
@@ -55,6 +65,13 @@ namespace FatturazioneContratti.Orders
             if (errori.Length > 0)
             {
                 LogDiagnostica.Errore(logMessage, $"Creazione ordine non eseguita:{Environment.NewLine}{errori}");
+                return null;
+            }
+
+            StringBuilder? erroriAnagrafiche = ValidaAnagraficheContratto(request.Contratto);
+            if (erroriAnagrafiche is not null)
+            {
+                LogDiagnostica.Errore(logMessage, $"Creazione ordine non eseguita:{Environment.NewLine}{erroriAnagrafiche}");
                 return null;
             }
 
@@ -108,11 +125,16 @@ namespace FatturazioneContratti.Orders
             testata.TaxJournal = string.IsNullOrWhiteSpace(request.RegistroIva)
                 ? RegistroIvaDefault
                 : request.RegistroIva.Trim();
-            testata.OurReference = request.Sede?.Trim() ?? string.Empty;
+            testata.OurReference = StringHelpers.SubstringSafe(request.Sede, 32);
+            testata.Salesperson = StringHelpers.SubstringSafe(request.Agente, 8);
+            testata.CostCenter = StringHelpers.SubstringSafe(request.CentroCosto, 8);
             if (anagrafica.Presentation.HasValue)
                 testata.Presentation = anagrafica.Presentation.Value;
             if (request.Divisione.HasValue)
                 testata.Divisione = request.Divisione;
+            // Divisione sempre "Vigilanza": il valore nelle preferenze utente non deve
+            // decidere la divisione dell'ordine (decisione 27/10/2026).
+            testata.Divisione = DivisioneVigilanza;
             if (request.TipoVendita.HasValue)
                 testata.SaleType = request.TipoVendita;
 
@@ -211,6 +233,15 @@ namespace FatturazioneContratti.Orders
                 righe.Add(riga);
             }
 
+            // ---------------------------------------------------------------- tabelle contratto (ALLOrdCli*)
+            // Le entità vengono costruite fuori transazione (solo default/metadata), poi
+            // ricevono l'IdOrdCli dopo l'allocazione del contatore e sono inserite nella
+            // stessa transazione della testata.
+            var avvisi = new List<string>();
+            ContrattoCreato? contrattoCreato = CostruisciContratto(request, logMessage, avvisi);
+            if (request.Contratto is not null && contrattoCreato is null)
+                return null;   // errore già emesso: non creare un ordine senza contratto
+
             // ---------------------------------------------------------------- scrittura in transazione
             LogDiagnostica.Informativo(logMessage,
                 $"Creazione ordine cliente {cliente} del {dataOrdine:dd/MM/yyyy}, {righe.Count} riga/e...");
@@ -243,6 +274,13 @@ namespace FatturazioneContratti.Orders
                 BulkPersistenceHelper.BulkExecuteList(_context, new List<MaSaleOrdShipping> { shipping }, "MA_SaleOrdShipping", BulkOperation.Insert, "spedizioni ordine", sb);
                 BulkPersistenceHelper.BulkExecuteList(_context, new List<MaSaleOrdNotes> { notes }, "MA_SaleOrdNotes", BulkOperation.Insert, "note ordine", sb);
                 BulkPersistenceHelper.BulkExecuteList(_context, righe, "MA_SaleOrdDetails", BulkOperation.Insert, "righe ordine", sb);
+
+                if (contrattoCreato is not null)
+                {
+                    contrattoCreato.AssegnaIdOrdine(saleOrdIdCreato);
+                    InserisciContratto(contrattoCreato, sb);
+                }
+
                 LogDiagnostica.Scarica(logMessage, bulk: sb);
 
                 if (rigaNuovaNumeratore)
@@ -258,7 +296,7 @@ namespace FatturazioneContratti.Orders
 
             LogDiagnostica.Informativo(logMessage,
                 $"Ordine creato: {numeroOrdineCreato} (SaleOrdId {saleOrdIdCreato}), {righe.Count} riga/e, cliente {cliente}.");
-            return new EsitoCreazioneOrdine(saleOrdIdCreato, numeroOrdineCreato, righe.Count);
+            return new EsitoCreazioneOrdine(saleOrdIdCreato, numeroOrdineCreato, righe.Count, avvisi);
         }
 
         /// <summary>Controlli di forma della richiesta (i valori sono già tipizzati dai record).</summary>
@@ -297,6 +335,47 @@ namespace FatturazioneContratti.Orders
             {
                 errori.AppendLine("L'ordine deve contenere almeno una riga.");
                 return errori;
+            }
+
+            if (request.Contratto is { } contratto)
+            {
+                if (contratto.Condizioni is null)
+                    errori.AppendLine("Condizioni contratto mancanti.");
+                if (contratto.Righe is null || contratto.Righe.Count == 0)
+                    errori.AppendLine("Il contratto deve contenere almeno una riga.");
+                else
+                {
+                    int numeroRigaContratto = 0;
+                    foreach (RigaContrattoCreazione rc in contratto.Righe)
+                    {
+                        numeroRigaContratto++;
+                        if (string.IsNullOrWhiteSpace(rc.Servizio))
+                            errori.AppendLine($"Riga contratto {numeroRigaContratto}: servizio mancante.");
+                        if (!string.IsNullOrWhiteSpace(rc.Servizio) && rc.Servizio.Trim().Length > 21)
+                            errori.AppendLine($"Riga contratto {numeroRigaContratto}: servizio troppo lungo (max 21).");
+                        if (string.IsNullOrWhiteSpace(rc.TipoRigaServizio))
+                            errori.AppendLine($"Riga contratto {numeroRigaContratto}: tipo riga servizio mancante (obbligatorio in Mago).");
+                        if (!string.IsNullOrWhiteSpace(rc.Descrizione) && rc.Descrizione.Trim().Length > 128)
+                            errori.AppendLine($"Riga contratto {numeroRigaContratto}: descrizione troppo lunga (max 128).");
+                        if (!string.IsNullOrWhiteSpace(rc.TipoRigaServizio) && rc.TipoRigaServizio.Trim().Length > 12)
+                            errori.AppendLine($"Riga contratto {numeroRigaContratto}: tipo riga servizio troppo lungo (max 12).");
+
+                        // Il Codice Integra sulla distinta è la chiave con cui il consuntivo
+                        // collega servizi aggiuntivi e righe fatturate: senza, il contratto
+                        // viene creato ma non è elaborabile.
+                        int numeroDistinta = 0;
+                        foreach (RigaDistintaCreazione rd in rc.Distinta ?? Array.Empty<RigaDistintaCreazione>())
+                        {
+                            numeroDistinta++;
+                            if (string.IsNullOrWhiteSpace(rd.CodIntegra))
+                                errori.AppendLine(
+                                    $"Riga contratto {numeroRigaContratto}, distinta {numeroDistinta}: codice Integra mancante (obbligatorio).");
+                            if (string.IsNullOrWhiteSpace(rd.Servizio))
+                                errori.AppendLine(
+                                    $"Riga contratto {numeroRigaContratto}, distinta {numeroDistinta}: servizio mancante.");
+                        }
+                    }
+                }
             }
 
             int numeroRiga = 0;

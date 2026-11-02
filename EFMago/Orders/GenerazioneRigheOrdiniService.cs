@@ -131,6 +131,7 @@ namespace FatturazioneContratti.Orders
                     stato.UpdateAllordCliContratto.Count,
                     stato.UpdateMaSaleOrd,
                     stato.InsertMaSaleOrdDetails,
+                    stato.DeleteMaSaleOrdDetails,
                     stato.UpdateAllordCliAcc,
                     stato.UpdateAllordCliAttivita,
                     stato.UpdateAllordCliContratto,
@@ -248,8 +249,15 @@ namespace FatturazioneContratti.Orders
             {
                 if (o.MaSaleOrdDetails.Count == 1 && CheckRigaBianca(o.MaSaleOrdDetails.First()))
                 {
+                    // La riga bianca ricopre Line/Position 1: se le righe nuove ripartissero
+                    // da 0 andrebbero in conflitto di chiave. La riga NON viene riposizionata,
+                    // viene eliminata in bulk (prima degli insert, stessa transazione).
                     cOrd.LastLine = 0;
                     so.CurLastPosition = 0;
+
+                    var rigaBianca = o.MaSaleOrdDetails.First();
+                    st.DeleteMaSaleOrdDetails.Add(rigaBianca);
+                    o.MaSaleOrdDetails.Remove(rigaBianca);
                 }
 
                 // Allineamento consegna per attività di rifatturazione
@@ -951,6 +959,7 @@ namespace FatturazioneContratti.Orders
             int totAggiornate,
             List<MaSaleOrd> ordini,
             List<MaSaleOrdDetails> details,
+            List<MaSaleOrdDetails> righeRimosse,
             //List<MaSaleOrdSummary> summaries,
             List<AllordCliAcc> accessorie,
             List<AllordCliAttivita> attivita,
@@ -959,11 +968,14 @@ namespace FatturazioneContratti.Orders
             Action<string, LogTarget>? logMessage,
             CancellationToken token = default)
         {
-            if (totNuove == 0 && totAggiornate == 0) return true;
+            if (totNuove == 0 && totAggiornate == 0 && righeRimosse.Count == 0) return true;
 
             bool esito = BulkPersistenceHelper.ExecuteInBulkTransaction(_context, () =>
             {
                 BulkPersistenceHelper.BulkExecuteList(_context, ordini, "MaSaleOrd", BulkOperation.Update, "teste ordini", bulkMessage, token);
+                // La riga bianca ricopre Line/Position 1 come le righe nuove: va cancellata
+                // PRIMA dell'insert per evitare il conflitto di chiave.
+                BulkPersistenceHelper.BulkExecuteList(_context, righeRimosse, "MaSaleOrdDetails", BulkOperation.Delete, "righe bianche ordini", bulkMessage, token);
                 BulkPersistenceHelper.BulkExecuteList(_context, details, "MaSaleOrdDetails", BulkOperation.Insert, "righe ordini", bulkMessage, token);
                 //BulkPersistenceHelper.BulkExecuteList(_context, summaries, "MaSaleOrdSummary", BulkOperation.InsertOrUpdate, "totali ordini", bulkMessage);
                 BulkPersistenceHelper.BulkExecuteList(_context, accessorie, "AllordCliAcc", BulkOperation.Update, "dati accessori ordini", bulkMessage, token);
@@ -973,7 +985,7 @@ namespace FatturazioneContratti.Orders
 
             if (esito)
             {
-                string riassunto = $"[RIASSUNTO] Ordini con Righe: {totNuove} | Ordini con Adeguamenti: {totAggiornate}";
+                string riassunto = $"[RIASSUNTO] Ordini con Righe: {totNuove} | Ordini con Adeguamenti: {totAggiornate} | Righe bianche rimosse: {righeRimosse.Count}";
                 LogDiagnostica.Informativo(logMessage, riassunto);
             }
 
@@ -1014,6 +1026,8 @@ namespace FatturazioneContratti.Orders
             public List<AllordCliAttivita> UpdateAllordCliAttivita { get; } = new List<AllordCliAttivita>();
             public List<AllordCliAcc> UpdateAllordCliAcc { get; } = new List<AllordCliAcc>();
             public List<MaSaleOrdDetails> InsertMaSaleOrdDetails { get; } = new List<MaSaleOrdDetails>();
+            /// <summary>Righe bianche da rimuovere: ricoprono Position/Line 1, che le righe nuove riutilizzano dopo il reset a 0.</summary>
+            public List<MaSaleOrdDetails> DeleteMaSaleOrdDetails { get; } = new List<MaSaleOrdDetails>();
 
             public int TotOrdiniConNuoveRighe { get; set; }
             public int TotOrdiniConRigheAggiornate { get; set; }

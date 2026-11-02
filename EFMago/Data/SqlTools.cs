@@ -46,6 +46,11 @@ namespace FatturazioneContratti.Data
                 Pooling = true,
                 ConnectTimeout = 30
             };
+
+            // Utente vuoto = autenticazione Windows (usata dagli harness e dagli ambienti
+            // in cui l'app gira con un account di dominio già abilitato su SQL Server).
+            builder.IntegratedSecurity = string.IsNullOrWhiteSpace(opts.UserId);
+
             return builder.ConnectionString;
         }
 
@@ -86,8 +91,14 @@ namespace FatturazioneContratti.Data
             // (SQL Server 2008). Senza questa opzione EF Core 8 traduce i Contains su collezioni
             // parametrizzate con OPENJSON ... WITH, che SQL Server rifiuta con "sintassi non
             // corretta in prossimità della parola chiave 'WITH'" quando il compat è < 130.
+            // EnableRetryOnFailure: rende le query resilienti ai transient failure di SQL
+            // Server (es. SQLEXPRESS ancora in avvio o pipe della memoria condivisa
+            // momentaneamente chiusa, errore 233). Senza di essa ogni blip di connessione
+            // svuota le tendine del form "Nuovo Ordine" (ALLTipoRigaServizio, MA_ItemTypes, ...).
             optionsBuilder.UseSqlServer(GetCurrentConnectionString(),
-                sqlOptions => sqlOptions.UseCompatibilityLevel(100));
+                sqlOptions => sqlOptions
+                    .UseCompatibilityLevel(100)
+                    .EnableRetryOnFailure(errorNumbersToAdd: new[] { 233 }));
 
             if (options.IsDebugging)
             {

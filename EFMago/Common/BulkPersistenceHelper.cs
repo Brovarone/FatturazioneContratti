@@ -15,7 +15,8 @@ namespace FatturazioneContratti.Common
     {
         Insert,
         Update,
-        InsertOrUpdate
+        InsertOrUpdate,
+        Delete
     }
 
     public static class BulkPersistenceHelper
@@ -141,6 +142,9 @@ namespace FatturazioneContratti.Common
                 case BulkOperation.InsertOrUpdate:
                     context.BulkInsertOrUpdate(entityList, bulkConfig);
                     break;
+                case BulkOperation.Delete:
+                    context.BulkDelete(entityList, bulkConfig);
+                    break;
             }
 
             // Contatori: si stampa solo quello pertinente all'operazione. Prima usciva
@@ -155,6 +159,9 @@ namespace FatturazioneContratti.Common
                     break;
                 case BulkOperation.Update:
                     contatori.Add($"Agg:{stats?.StatsNumberUpdated ?? count}");
+                    break;
+                case BulkOperation.Delete:
+                    contatori.Add($"Del:{stats?.StatsNumberDeleted ?? count}");
                     break;
                 default:
                     if (stats?.StatsNumberInserted is int inserite) contatori.Add($"Ins:{inserite}");

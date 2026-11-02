@@ -39,6 +39,8 @@ namespace EFMago.Models
         public virtual DbSet<AllordFiglio> AllordFiglio { get; set; }
         public virtual DbSet<AllordPadre> AllordPadre { get; set; }
         public virtual DbSet<AlltipoRigaServizio> AlltipoRigaServizio { get; set; }
+        /// <summary>Tipologie servizi (aggiunta manuale: anagrafica dei codici usati in ALLOrdCliTipologiaServizi).</summary>
+        public virtual DbSet<MaItemTypes> MaItemTypes { get; set; }
         #region blocco Clienti
         public virtual DbSet<MaCustomerClassification> MaCustomerClassification { get; set; }
         public virtual DbSet<MaCustomerCtg> MaCustomerCtg { get; set; }
@@ -434,7 +436,10 @@ namespace EFMago.Models
             });
             modelBuilder.Entity<AllordCliAttivita>(entity =>
             {
-                entity.HasKey(e => new { e.IdOrdCli, e.Line })
+                // PK reale su ALLSPA/TMPSPA: (IdOrdCli, Line, RifLinea). La Line riparte
+                // da 1 per ogni riga contratto (verificato sui dati reali), quindi senza
+                // RifLinea la chiave andrebbe in conflitto con più attività sullo stesso ordine.
+                entity.HasKey(e => new { e.IdOrdCli, e.Line, e.RifLinea })
                     .IsClustered(false);
 
                 entity.ToTable("ALLOrdCliAttivita");
@@ -14865,6 +14870,46 @@ namespace EFMago.Models
                     .IsUnicode(false);
 
                 entity.Property(e => e.OriginDocSubId).HasColumnName("OriginDocSubID");
+            });
+
+            // AGGIUNTO A MANO: anagrafica tipologie servizi (MA_ItemTypes).
+            // Non era nello scaffold; serve a validare/leggere i codici di
+            // ALLOrdCliTipologiaServizi.Tipologia e MA_Items.ItemType.
+            modelBuilder.Entity<MaItemTypes>(entity =>
+            {
+                entity.HasKey(e => e.CodeType)
+                    .IsClustered(false);
+
+                entity.ToTable("MA_ItemTypes");
+
+                entity.Property(e => e.CodeType)
+                    .HasMaxLength(8)
+                    .IsUnicode(false);
+
+                entity.Property(e => e.Description)
+                    .HasMaxLength(32)
+                    .IsUnicode(false)
+                    .HasDefaultValueSql("('')");
+
+                entity.Property(e => e.DiscountFormula)
+                    .HasMaxLength(16)
+                    .IsUnicode(false);
+
+                entity.Property(e => e.Notes)
+                    .HasMaxLength(64)
+                    .IsUnicode(false);
+
+                entity.Property(e => e.HasCustomers)
+                    .HasMaxLength(1)
+                    .IsUnicode(false)
+                    .IsFixedLength();
+
+                entity.Property(e => e.HasSuppliers)
+                    .HasMaxLength(1)
+                    .IsUnicode(false)
+                    .IsFixedLength();
+
+                entity.Property(e => e.Tbguid).HasColumnName("TBGuid");
             });
 
         }
