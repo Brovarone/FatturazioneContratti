@@ -93,5 +93,48 @@ namespace FatturazioneContratti.Common
         MovCes = 3735585    //Nr. Riferimento Movimenti Cespiti
     }
 
+    /// <summary>
+    /// Costanti Mago.NET che non sono enum ma devono essere condivise tra i servizi.
+    /// </summary>
+    public static class MagoConstants
+    {
+        /// <summary>
+        /// Causali pagamento Mago.NET (MA_EI_ITDocAdditionalData / tabelle causali).
+        /// Mappa la lettera della causale al relativo ID Mago per fatture elettroniche.
+        /// </summary>
+        public static readonly Dictionary<string, int> CausaliPagamento = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) 
+        {
+            { "", 32440347 }, 
+            { "A", 32440320 }, 
+            { "B", 32440321 }, 
+            { "C", 32440322 }, 
+            { "D", 32440323 }, 
+            { "E", 32440324 }, 
+            { "G", 32440325 }, 
+            { "H", 32440326 }, 
+            { "I", 32440327 }, 
+            { "L", 32440328 }, 
+            { "M", 32440329 }, 
+            { "N", 32440330 }, 
+            { "O", 32440331 }, 
+            { "P", 32440332 }, 
+            { "Q", 32440333 }, 
+            { "R", 32440334 }, 
+            { "S", 32440335 }, 
+            { "T", 32440336 }, 
+            { "U", 32440337 }, 
+            { "V", 32440338 }, 
+            { "W", 32440339 }, 
+            { "X", 32440340 }, 
+            { "Y", 32440341 }, 
+            { "Z", 32440342 }, 
+            { "L1", 32440343 }, 
+            { "M1", 32440344 }, 
+            { "O1", 32440345 }, 
+            { "V1", 32440346 }, 
+            { "M2", 32440348 }, 
+            { "ZO", 32440349 } 
+        };
+    }
 
 }

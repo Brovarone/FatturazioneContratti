@@ -294,7 +294,7 @@ namespace FatturazioneContratti.Forms
                     conn,
                     trans,
                     filtri,
-                    loginId: AppConfig.LoginId,
+                    _loginId: AppConfig.LoginId,
                     logMessage: Log,
                     token: token);
 

@@ -10,8 +10,6 @@ in git, le regole di progetto (log, consuntivo, performance) sono in `AGENTS.md`
 - [ ] Eseguire `sql/2026-10-22_Consuntivo_ChiaveFattura.sql` su TMPSPA, poi su ALLSPA/DEMON
       (colonna `Integra_Interventi.MChiaveFattura`, indici, vista `ALLVInterventiFattura`).
       Senza la colonna l'app non può interrogare `IntegraInterventi`.
-- [ ] Dopo il DDL: re-scaffold in `ALLMigrazione` + `copia.ps1`, altrimenti la proprietà
-      `MChiaveFattura` aggiunta a mano in `EFMago/Data/Models/IntegraInterventi.cs` viene sovrascritta.
 - [ ] Run consuntivo su TMPSPA con Controllo + Fatturazione: ogni riga servizio deve avere
       `Packing = <chiave>`, e gli interventi del periodo la stessa `MChiaveFattura`.
 - [ ] Giro proforma in Mago (fattura → proforma → fattura): la chiave deve restare su `Packing`
@@ -34,8 +32,6 @@ Nessun test automatico: da provare via UI con flag Test DB attivo.
 3. **Consuntivazione** (la più a rischio) — raggruppamento fatture, ID documento
    assegnato solo ai gruppi con righe, cross-ref/ritenuta solo con righe,
    `LastSubId` via `GroupBy`, regola cessazione, checkbox "Prosegui comunque".
-4. **Allineamento Canoni Fatture** — nuova dialog filtri (`AllNumbers` /
-   intervallo primo-ultimo) da riverificare.
 
 **Log** (per ogni workflow)
 - `LogMode = Entrambi`: il file contiene filtri della run, conteggi, dettaglio
@@ -83,18 +79,8 @@ Libreria `EFMago` e `CreazioneOrdiniService` sono pronti e verificati su TMPSPA
 - [ ] **C** — nuovo repo sito Blazor Server (login applicativo, form ordine);
       referenziare `EFMago` via path/git; `appsettings.json` → `SqlTools.Configure`.
       Workload ASP.NET in VS 2022 da installare (~2 GB).
-- [ ] **D** — form ordine (cliente, righe, note) sul sito.
 - [ ] **E** — deploy IIS su server Biella (HTTPS).
 
 Note: niente health/schema check a runtime (`ModelManifest` differito);
 istanziazione manuale dei servizi (niente DI nella libreria); stesso pattern
 contatori/audit.
-
----
-
-## 5. Residuo operativo in Mago (verificare se già fatto)
-
-Su **ALLSPA**: le fatture `SaleDocId` 59240 e 59241 (30/09/2026, cliente E50089)
-sono state scritte con la vecchia regola cessazione (solo contratti cessati).
-Vanno annullate/eliminate in Mago e il consuntivo di settembre va rilanciato
-(attese 10 fatture, 2 contratti cessati con 9 interventi).

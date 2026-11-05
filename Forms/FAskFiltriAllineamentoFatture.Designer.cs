@@ -89,6 +89,7 @@ namespace FatturazioneContratti.Forms
             grpNumeri.TabIndex = 4;
             grpNumeri.TabStop = false;
             grpNumeri.Text = "Numeri documento";
+            // 
             // radTuttiNumeri
             // 
             radTuttiNumeri.AutoSize = true;
@@ -134,6 +135,7 @@ namespace FatturazioneContratti.Forms
             txtNrFirst.Name = "txtNrFirst";
             txtNrFirst.Size = new Size(111, 23);
             txtNrFirst.TabIndex = 3;
+            txtNrFirst.TextChanged += txtNrFirst_TextChanged;
             // 
             // lblNrLast
             // 
@@ -158,12 +160,14 @@ namespace FatturazioneContratti.Forms
             // chkSincronizzaFE
             // 
             chkSincronizzaFE.AutoSize = true;
+            chkSincronizzaFE.Checked = true;
+            chkSincronizzaFE.CheckState = CheckState.Checked;
             chkSincronizzaFE.Location = new Point(18, 238);
             chkSincronizzaFE.Margin = new Padding(4, 3, 4, 3);
             chkSincronizzaFE.Name = "chkSincronizzaFE";
-            chkSincronizzaFE.Size = new Size(267, 19);
+            chkSincronizzaFE.Size = new Size(205, 19);
             chkSincronizzaFE.TabIndex = 5;
-            chkSincronizzaFE.Text = "Sincronizza anche dati fattura elettronica (AllordCliFattEle)";
+            chkSincronizzaFE.Text = "Sincronizza dati fattura elettronica";
             chkSincronizzaFE.UseVisualStyleBackColor = true;
             // 
             // btnOk

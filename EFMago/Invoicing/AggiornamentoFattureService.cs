@@ -23,7 +23,7 @@ namespace FatturazioneContratti.Invoicing
             SqlConnection connection,
             SqlTransaction transaction,
             FiltriAllineamentoFatture filtri,
-            int loginId,
+            int _loginId,
             Action<string, LogTarget>? logMessage = null,
             CancellationToken token = default)
         {
@@ -68,7 +68,7 @@ namespace FatturazioneContratti.Invoicing
                 cmd.Parameters.Add("@NrFirst", SqlDbType.VarChar, 10).Value = filtri.NrFirst ?? string.Empty;
                 cmd.Parameters.Add("@NrLast", SqlDbType.VarChar, 10).Value = filtri.NrLast ?? string.Empty;
                 cmd.Parameters.Add("@DataMod", SqlDbType.VarChar, 8).Value = now.ToString("yyyyMMdd");
-                cmd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
+                cmd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = _loginId;
 
                 // Interruzione richiesta prima della UPDATE: si lancia OperationCanceledException
                 // e la transazione del chiamante viene rollbackata dal dispose.
@@ -83,7 +83,7 @@ namespace FatturazioneContratti.Invoicing
                 if (filtri.SincronizzaFatturaElettronica)
                 {
                     token.ThrowIfCancellationRequested();
-                    (int documenti, int campi) = UpsertDatiFatturaElettronica(connection, transaction, filtri, now, loginId, logMessage, token);
+                    (int documenti, int campi) = UpsertDatiFatturaElettronica(connection, transaction, filtri, now, _loginId, logMessage, token);
                     LogDiagnostica.Informativo(logMessage, documenti <= 0
                         ? "Nessun documento di vendita con dati fattura elettronica da sincronizzare"
                         : documenti == 1
@@ -112,7 +112,7 @@ namespace FatturazioneContratti.Invoicing
             FiltriAllineamentoFatture filtri,
             DateTime now,
             int loginId,
-            Action<string, LogTarget>? logMessage,
+            Action<string, LogTarget>? _logMessage,
             CancellationToken token)
         {
             // Chiavi delle righe fattura target: stessi filtri dell'operazione A, senza il
@@ -221,23 +221,11 @@ namespace FatturazioneContratti.Invoicing
             return (Convert.ToInt32(reader.GetValue(0)), Convert.ToInt32(reader.GetValue(1)));
         }
 
-        private static readonly Dictionary<string, int> CausaliPagamentoFe = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
-        {
-            { "", 32440347 }, { "A", 32440320 }, { "B", 32440321 }, { "C", 32440322 },
-            { "D", 32440323 }, { "E", 32440324 }, { "G", 32440325 }, { "H", 32440326 },
-            { "I", 32440327 }, { "L", 32440328 }, { "M", 32440329 }, { "N", 32440330 },
-            { "O", 32440331 }, { "P", 32440332 }, { "Q", 32440333 }, { "R", 32440334 },
-            { "S", 32440335 }, { "T", 32440336 }, { "U", 32440337 }, { "V", 32440338 },
-            { "W", 32440339 }, { "X", 32440340 }, { "Y", 32440341 }, { "Z", 32440342 },
-            { "L1", 32440343 }, { "M1", 32440344 }, { "O1", 32440345 }, { "V1", 32440346 },
-            { "M2", 32440348 }, { "ZO", 32440349 }
-        };
-
         private static string SqlFeValueExpression(string propName)
         {
             if (propName == "F2_1_1_5_4")
             {
-                var causali = string.Join(", ", CausaliPagamentoFe
+                var causali = string.Join(", ", MagoConstants.CausaliPagamento
                     .Where(kv => kv.Key.Length > 0)
                     .Select(kv => $"('{kv.Key}', {kv.Value})"));
                 return $"(SELECT c.Id FROM (VALUES {causali}) c(Lettera, Id) WHERE c.Lettera = UPPER(LTRIM(RTRIM(ISNULL(r.{propName}, '')))))";

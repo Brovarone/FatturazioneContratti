@@ -14,7 +14,15 @@ namespace FatturazioneContratti.Forms
             dtpDa.Value = new DateTime(now.Year, 1, 1);
             dtpA.Value = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month));
 
-            UpdateNumberInputs();
+            UpdateNumberInputs();            
+        }
+
+        private void txtNrFirst_TextChanged(object sender, EventArgs e)
+        {
+            // Se è attiva la modalità intervallo, tenere sincronizzato il campo "ultimo"
+            // con il primo (l'utente può poi modificarlo per un range vero e proprio).
+            if (radIntervalloNumeri.Checked)
+                txtNrLast.Text = txtNrFirst.Text;
         }
 
         public FiltriAllineamentoFatture OttieniFiltri()
