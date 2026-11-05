@@ -28,6 +28,7 @@ namespace FatturazioneContratti.Forms
             txtNrFirst = new TextBox();
             lblNrLast = new Label();
             txtNrLast = new TextBox();
+            chkSincronizzaFE = new CheckBox();
             btnOk = new Button();
             btnCancel = new Button();
             grpNumeri.SuspendLayout();

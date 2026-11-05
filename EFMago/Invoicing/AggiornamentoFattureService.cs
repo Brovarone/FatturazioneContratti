@@ -127,7 +127,8 @@ namespace FatturazioneContratti.Invoicing
                   WHERE (Doc.LineType = @LineTypeMerce OR Doc.LineType = @LineTypeServizio)
                     AND (Testa.DocumentType = @DocFattura OR Testa.DocumentType = @DocFatturaAcc OR Testa.DocumentType = @DocNotaCredito)
                     AND (Testa.DocumentDate >= @FromDate AND Testa.DocumentDate <= @ToDate)
-                    AND (@AllNumbers = 1 OR (@AllNumbers = 0 AND Testa.DocNo >= @NrFirst AND Testa.DocNo <= @NrLast))",
+                    AND (@AllNumbers = 1 OR (@AllNumbers = 0 AND Testa.DocNo >= @NrFirst AND Testa.DocNo <= @NrLast))
+                    AND Doc.SaleOrdId IS NOT NULL",
                 connection, transaction))
             {
                 cmdChiavi.CommandTimeout = SqlTools.CommandTimeoutSeconds;
@@ -145,7 +146,9 @@ namespace FatturazioneContratti.Invoicing
                 using var reader = cmdChiavi.ExecuteReader();
                 while (reader.Read())
                 {
-                    righe.Add((reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3)));
+                    righe.Add((Convert.ToInt32(reader.GetValue(0)), Convert.ToInt32(reader.GetValue(1)),
+                        reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2)),
+                        reader.IsDBNull(3) ? 0 : Convert.ToInt32(reader.GetValue(3))));
                 }
             }
 
@@ -171,7 +174,7 @@ namespace FatturazioneContratti.Invoicing
                 {
                     var fe = new EFMago.Models.AllordCliFattEle
                     {
-                        IdOrdCli = reader.GetInt32(reader.GetOrdinal("IdOrdCli")),
+                        IdOrdCli = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("IdOrdCli"))),
                         F2_1_1_5_4 = GetStringOrNull(reader, "F2_1_1_5_4"),
                         F2_1_1_11 = GetStringOrNull(reader, "F2_1_1_11"),
                         F2_1_2_6 = GetStringOrNull(reader, "F2_1_2_6"),
@@ -200,26 +203,39 @@ namespace FatturazioneContratti.Invoicing
                     cmdLine.Parameters.Add($"@d{i}", SqlDbType.Int).Value = docIds[i];
                 using var reader = cmdLine.ExecuteReader();
                 while (reader.Read())
-                    lineEsistenti[reader.GetInt32(0)] = reader.GetInt32(1);
+                    lineEsistenti[Convert.ToInt32(reader.GetValue(0))] = Convert.ToInt32(reader.GetValue(1));
             }
 
             var prossimaLine = new Dictionary<int, int>(lineEsistenti);
             var righeDaScrivere = new List<(int DocId, int Line, string FieldName, string FieldValue)>();
 
-            var campiFe = new List<(string PropName, string FieldName)>
+            // Mappa completa dei campi FE: tutti i campi di ALLOrdCliFattEle (tranne IdOrdCli
+            // e i campi di audit) vengono sincronizzati, con il FieldName XML corrispondente.
+            var sezioniFe = new Dictionary<string, string>
             {
-                ("F2_1_1_5_4", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiGeneraliDocumento.DatiRitenuta.CausalePagamento"),
-                ("F2_1_1_11", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiGeneraliDocumento.Causale"),
-                ("F2_1_2_6", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiOrdineAcquisto.CodiceCUP"),
-                ("F2_1_2_7", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiOrdineAcquisto.CodiceCIG"),
-                ("F2_1_3_6", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiContratto.CodiceCUP"),
-                ("F2_1_3_7", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiContratto.CodiceCIG"),
-                ("F2_1_4_6", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiConvenzione.CodiceCUP"),
-                ("F2_1_4_7", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiConvenzione.CodiceCIG"),
-                ("F2_1_5_6", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiRicezione.CodiceCUP"),
-                ("F2_1_5_7", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiRicezione.CodiceCIG"),
+                { "2", "DatiOrdineAcquisto" },
+                { "3", "DatiContratto" },
+                { "4", "DatiConvenzione" },
+                { "5", "DatiRicezione" },
             };
+            var suffissiFe = new Dictionary<string, string>
+            {
+                { "1", "RiferimentoNumeroLinea" },
+                { "2", "IdDocumento" },
+                { "3", "Data" },
+                { "4", "NumItem" },
+                { "5", "CodiceCommessaConvenzione" },
+                { "6", "CodiceCUP" },
+                { "7", "CodiceCIG" },
+            };
+            var campiFe = new List<(string PropName, string FieldName)>();
+            campiFe.Add(("F2_1_1_5_4", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiGeneraliDocumento.DatiRitenuta.CausalePagamento"));
+            campiFe.Add(("F2_1_1_11", "FatturaElettronica.FatturaElettronicaBody.DatiGenerali.DatiGeneraliDocumento.Causale"));
+            foreach (var sec in sezioniFe)
+                foreach (var suf in suffissiFe)
+                    campiFe.Add(($"F2_1_{sec.Key}_{suf.Key}", $"FatturaElettronica.FatturaElettronicaBody.DatiGenerali.{sec.Value}.{suf.Value}"));
 
+            var visti = new HashSet<(int DocId, string FieldName, string FieldValue)>();
             foreach (var riga in righe)
             {
                 if (!fattElePerOrdine.TryGetValue(riga.SaleOrdId, out var fe)) continue;
@@ -230,8 +246,11 @@ namespace FatturazioneContratti.Invoicing
 
                 foreach (var campo in campiFe)
                 {
-                    var valore = fe.GetType().GetProperty(campo.PropName)?.GetValue(fe) as string;
+                    var prop = fe.GetType().GetProperty(campo.PropName);
+                    var valore = ConvertFeValue(campo.PropName, prop?.GetValue(fe));
                     if (string.IsNullOrEmpty(valore)) continue;
+                    // Evita righe duplicate con lo stesso valore per la stessa fattura.
+                    if (!visti.Add((riga.SaleDocId, campo.FieldName, valore))) continue;
                     righeDaScrivere.Add((riga.SaleDocId, line, campo.FieldName, valore));
                 }
             }
@@ -294,6 +313,36 @@ namespace FatturazioneContratti.Invoicing
             catch { return null; }
             if (reader.IsDBNull(ordinal)) return null;
             return reader.GetString(ordinal);
+        }
+
+        private static readonly Dictionary<string, int> CausaliPagamentoFe = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "", 32440347 }, { "A", 32440320 }, { "B", 32440321 }, { "C", 32440322 },
+            { "D", 32440323 }, { "E", 32440324 }, { "G", 32440325 }, { "H", 32440326 },
+            { "I", 32440327 }, { "L", 32440328 }, { "M", 32440329 }, { "N", 32440330 },
+            { "O", 32440331 }, { "P", 32440332 }, { "Q", 32440333 }, { "R", 32440334 },
+            { "S", 32440335 }, { "T", 32440336 }, { "U", 32440337 }, { "V", 32440338 },
+            { "W", 32440339 }, { "X", 32440340 }, { "Y", 32440341 }, { "Z", 32440342 },
+            { "L1", 32440343 }, { "M1", 32440344 }, { "O1", 32440345 }, { "V1", 32440346 },
+            { "M2", 32440348 }, { "ZO", 32440349 }
+        };
+
+        private static string? ConvertFeValue(string propName, object? raw)
+        {
+            if (raw is null) return null;
+            if (propName == "F2_1_1_5_4")
+            {
+                var s = raw as string;
+                if (string.IsNullOrWhiteSpace(s)) return null;
+                if (CausaliPagamentoFe.TryGetValue(s.Trim(), out int id)) return id.ToString();
+                return null;
+            }
+            if (raw is string str) return string.IsNullOrWhiteSpace(str) ? null : str.Trim();
+            if (raw is DateTime dt) return dt.ToString("dd/MM/yyyy");
+            if (raw is short sh) return sh.ToString();
+            if (raw is int i) return i.ToString();
+            if (raw is long l) return l.ToString();
+            return raw.ToString();
         }
     }
 }
