@@ -560,6 +560,14 @@ namespace FatturazioneContratti.Orders
                 debugging.AppendLine(" - [ESCLUSA] Consuntivo");
                 return true;
             }
+            if (c.NonRiportaInFatt == "1")
+            {
+                // Flag Mago "non riporta in fattura" (import Fox: canoni a zero).
+                // Non genera righe e non tocca DataProssimaFatt: se il valore viene
+                // corretto, i periodi arretrati restano recuperabili.
+                debugging.AppendLine(" - [ESCLUSA] Non riporta in fattura");
+                return true;
+            }
             if (c.Fatturato == "1")
             {
                 debugging.AppendLine(" - [ESCLUSA] Fatturata");

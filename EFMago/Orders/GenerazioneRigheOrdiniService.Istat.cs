@@ -178,6 +178,11 @@ namespace FatturazioneContratti.Orders
                             debugging.AppendLine($"# [ESCLUSA] (Consuntivo) R.:({sEx})");
                             continue;
                         }
+                        if (c.NonRiportaInFatt == "1")
+                        {
+                            debugging.AppendLine($"# [ESCLUSA] (Non riporta in fattura) R.:({sEx})");
+                            continue;
+                        }
                         if (c.Fatturato == "1")
                         {
                             debugging.AppendLine($"# [ESCLUSA] (Fatturata) R.:({sEx})");
