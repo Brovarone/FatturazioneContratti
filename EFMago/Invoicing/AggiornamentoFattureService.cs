@@ -83,12 +83,12 @@ namespace FatturazioneContratti.Invoicing
                 if (filtri.SincronizzaFatturaElettronica)
                 {
                     token.ThrowIfCancellationRequested();
-                    (int documenti, int righe) = UpsertDatiFatturaElettronica(connection, transaction, filtri, now, loginId, logMessage, token);
+                    (int documenti, int campi) = UpsertDatiFatturaElettronica(connection, transaction, filtri, now, loginId, logMessage, token);
                     LogDiagnostica.Informativo(logMessage, documenti <= 0
                         ? "Nessun documento di vendita con dati fattura elettronica da sincronizzare"
                         : documenti == 1
-                            ? $"Sincronizzati dati fattura elettronica su 1 documento ({righe} righe)."
-                            : $"Sincronizzati dati fattura elettronica su {documenti} documenti ({righe} righe).");
+                            ? $"Sincronizzati dati fattura elettronica su 1 documento ({campi} campi)."
+                            : $"Sincronizzati dati fattura elettronica su {documenti} documenti ({campi} campi).");
                 }
 
                 return true;
@@ -198,7 +198,7 @@ namespace FatturazioneContratti.Invoicing
             sql.AppendLine("WHERE rn = 1;");
             sql.AppendLine("DECLARE @inseriti int = @@ROWCOUNT;");
             sql.AppendLine("DROP TABLE #target;");
-            sql.AppendLine("SELECT @documenti, @inseriti;");
+            sql.AppendLine("SELECT @documenti, @campi;");
 
             using var cmd = new SqlCommand(sql.ToString(), connection, transaction);
             cmd.CommandTimeout = SqlTools.CommandTimeoutSeconds;
@@ -244,8 +244,9 @@ namespace FatturazioneContratti.Invoicing
             }
             var parts = propName.Split('_');
             var suffisso = parts.Length >= 4 ? parts[3] : string.Empty;
-            if (suffisso == "1") return $"CONVERT(varchar(10), r.{propName})";
-            if (suffisso == "3") return $"CONVERT(varchar(10), r.{propName}, 103)";
+            // 0 = riferimento linea non impostato; 1799-12-31 = DataNulla Mago.
+            if (suffisso == "1") return $"CONVERT(varchar(10), NULLIF(r.{propName}, 0))";
+            if (suffisso == "3") return $"CONVERT(varchar(10), NULLIF(r.{propName}, CONVERT(datetime, '17991231', 112)), 103)";
             return $"NULLIF(LTRIM(RTRIM(r.{propName})), '')";
         }
     }
