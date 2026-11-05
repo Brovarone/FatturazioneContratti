@@ -76,8 +76,8 @@ namespace FatturazioneContratti.Invoicing
 
                 int irows = cmd.ExecuteNonQuery();
                 LogDiagnostica.Informativo(logMessage, irows <= 0
-                    ? "Nessuna riga canoni da allineare: ALL_CanoniDataI è già valorizzata o non ci sono fatture collegate a ordini nel periodo."
-                    : $"Allineate {irows} righe canoni (date di competenza ALL_CanoniDataI).");
+                    ? "Nessuna riga canoni da allineare."
+                    : $"Allineate {irows} righe canoni.");
 
                 // --- OPERAZIONE B: upsert dati fattura elettronica ---
                 if (filtri.SincronizzaFatturaElettronica)
