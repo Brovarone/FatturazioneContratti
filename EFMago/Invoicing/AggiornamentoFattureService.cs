@@ -6,7 +6,6 @@ using System.Text;
 using FatturazioneContratti.Common;
 using FatturazioneContratti.Data;
 using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
 
 namespace FatturazioneContratti.Invoicing
 {
@@ -119,96 +118,6 @@ namespace FatturazioneContratti.Invoicing
             string sFromDate = filtri.DataFattDa.ToString("yyyyMMdd");
             string sToDate = filtri.DataFattA.ToString("yyyyMMdd");
 
-            var righe = new List<(int SaleDocId, int SaleOrdId, int SaleOrdSubId, int SaleOrdPos)>();
-            using (var cmdChiavi = new SqlCommand(
-                @"SELECT DISTINCT Doc.SaleDocId, Doc.SaleOrdId, Doc.SaleOrdSubId, Doc.SaleOrdPos
-                  FROM MA_SaleDoc Testa
-                  INNER JOIN MA_SaleDocDetail Doc ON Testa.SaleDocId = Doc.SaleDocId
-                  WHERE (Doc.LineType = @LineTypeMerce OR Doc.LineType = @LineTypeServizio)
-                    AND (Testa.DocumentType = @DocFattura OR Testa.DocumentType = @DocFatturaAcc OR Testa.DocumentType = @DocNotaCredito)
-                    AND (Testa.DocumentDate >= @FromDate AND Testa.DocumentDate <= @ToDate)
-                    AND (@AllNumbers = 1 OR (@AllNumbers = 0 AND Testa.DocNo >= @NrFirst AND Testa.DocNo <= @NrLast))
-                    AND Doc.SaleOrdId IS NOT NULL",
-                connection, transaction))
-            {
-                cmdChiavi.CommandTimeout = SqlTools.CommandTimeoutSeconds;
-                cmdChiavi.Parameters.Add("@LineTypeMerce", SqlDbType.Int).Value = (int)LineType.Merce;
-                cmdChiavi.Parameters.Add("@LineTypeServizio", SqlDbType.Int).Value = (int)LineType.Servizio;
-                cmdChiavi.Parameters.Add("@DocFattura", SqlDbType.Int).Value = (int)DocumentType.Fattura;
-                cmdChiavi.Parameters.Add("@DocFatturaAcc", SqlDbType.Int).Value = (int)DocumentType.FatturaAccompagnatoria;
-                cmdChiavi.Parameters.Add("@DocNotaCredito", SqlDbType.Int).Value = (int)DocumentType.NotaCredito;
-                cmdChiavi.Parameters.Add("@FromDate", SqlDbType.VarChar, 8).Value = sFromDate;
-                cmdChiavi.Parameters.Add("@ToDate", SqlDbType.VarChar, 8).Value = sToDate;
-                cmdChiavi.Parameters.Add("@AllNumbers", SqlDbType.Bit).Value = filtri.AllNumbers;
-                cmdChiavi.Parameters.Add("@NrFirst", SqlDbType.VarChar, 10).Value = filtri.NrFirst ?? string.Empty;
-                cmdChiavi.Parameters.Add("@NrLast", SqlDbType.VarChar, 10).Value = filtri.NrLast ?? string.Empty;
-
-                using var reader = cmdChiavi.ExecuteReader();
-                while (reader.Read())
-                {
-                    righe.Add((Convert.ToInt32(reader.GetValue(0)), Convert.ToInt32(reader.GetValue(1)),
-                        reader.IsDBNull(2) ? 0 : Convert.ToInt32(reader.GetValue(2)),
-                        reader.IsDBNull(3) ? 0 : Convert.ToInt32(reader.GetValue(3))));
-                }
-            }
-
-            if (righe.Count == 0) return 0;
-
-            // Recupero AllordCliFattEle per gli ordini delle righe fattura (1 per ordine).
-            var saleOrdIds = righe.Select(r => r.SaleOrdId).Distinct().ToList();
-            var fattElePerOrdine = new Dictionary<int, EFMago.Models.AllordCliFattEle>();
-            var sbFe = new StringBuilder("SELECT * FROM ALLOrdCliFattEle WHERE IdOrdCli IN (");
-            for (int i = 0; i < saleOrdIds.Count; i++)
-            {
-                if (i > 0) sbFe.Append(", ");
-                sbFe.Append($"@fe{i}");
-            }
-            sbFe.Append(")");
-            using (var cmdFe = new SqlCommand(sbFe.ToString(), connection, transaction))
-            {
-                cmdFe.CommandTimeout = SqlTools.CommandTimeoutSeconds;
-                for (int i = 0; i < saleOrdIds.Count; i++)
-                    cmdFe.Parameters.Add($"@fe{i}", SqlDbType.Int).Value = saleOrdIds[i];
-                using var reader = cmdFe.ExecuteReader();
-                while (reader.Read())
-                {
-                    var fe = new EFMago.Models.AllordCliFattEle
-                    {
-                        IdOrdCli = Convert.ToInt32(reader.GetValue(reader.GetOrdinal("IdOrdCli"))),
-                        F2_1_1_5_4 = GetStringOrNull(reader, "F2_1_1_5_4"),
-                        F2_1_1_11 = GetStringOrNull(reader, "F2_1_1_11"),
-                        F2_1_2_6 = GetStringOrNull(reader, "F2_1_2_6"),
-                        F2_1_2_7 = GetStringOrNull(reader, "F2_1_2_7"),
-                        F2_1_3_6 = GetStringOrNull(reader, "F2_1_3_6"),
-                        F2_1_3_7 = GetStringOrNull(reader, "F2_1_3_7"),
-                        F2_1_4_6 = GetStringOrNull(reader, "F2_1_4_6"),
-                        F2_1_4_7 = GetStringOrNull(reader, "F2_1_4_7"),
-                        F2_1_5_6 = GetStringOrNull(reader, "F2_1_5_6"),
-                        F2_1_5_7 = GetStringOrNull(reader, "F2_1_5_7"),
-                    };
-                    fattElePerOrdine[fe.IdOrdCli] = fe;
-                }
-            }
-
-            // Costruisco le righe da upsert: per ogni riga fattura e per ogni campo FE valorizzato.
-            // DocSubId = 0, SubLine = 0, Line = 1 (o MAX(Line)+1 per quel DocId se esistono già righe).
-            var docIds = righe.Select(r => r.SaleDocId).Distinct().ToList();
-            var lineEsistenti = new Dictionary<int, int>(); // DocId -> MAX(Line)
-            using (var cmdLine = new SqlCommand(
-                $"SELECT DocID, ISNULL(MAX(Line), 0) FROM MA_EI_ITDocAdditionalData WHERE DocID IN ({string.Join(",", docIds.Select((_, i) => $"@d{i}"))}) GROUP BY DocID",
-                connection, transaction))
-            {
-                cmdLine.CommandTimeout = SqlTools.CommandTimeoutSeconds;
-                for (int i = 0; i < docIds.Count; i++)
-                    cmdLine.Parameters.Add($"@d{i}", SqlDbType.Int).Value = docIds[i];
-                using var reader = cmdLine.ExecuteReader();
-                while (reader.Read())
-                    lineEsistenti[Convert.ToInt32(reader.GetValue(0))] = Convert.ToInt32(reader.GetValue(1));
-            }
-
-            var prossimaLine = new Dictionary<int, int>(lineEsistenti);
-            var righeDaScrivere = new List<(int DocId, int Line, string FieldName, string FieldValue)>();
-
             // Mappa completa dei campi FE: tutti i campi di ALLOrdCliFattEle (tranne IdOrdCli
             // e i campi di audit) vengono sincronizzati, con il FieldName XML corrispondente.
             var sezioniFe = new Dictionary<string, string>
@@ -235,84 +144,76 @@ namespace FatturazioneContratti.Invoicing
                 foreach (var suf in suffissiFe)
                     campiFe.Add(($"F2_1_{sec.Key}_{suf.Key}", $"FatturaElettronica.FatturaElettronicaBody.DatiGenerali.{sec.Value}.{suf.Value}"));
 
-            var visti = new HashSet<(int DocId, string FieldName, string FieldValue)>();
-            foreach (var riga in righe)
-            {
-                if (!fattElePerOrdine.TryGetValue(riga.SaleOrdId, out var fe)) continue;
+            var managedFieldNames = string.Join(", ", campiFe.Select(c => $"'{c.FieldName}'"));
+            var valuesFe = string.Join(",\n            ", campiFe.Select(c =>
+                $"('{c.FieldName}', CONVERT(varchar(256), {SqlFeValueExpression(c.PropName)}))"));
 
-                int line = prossimaLine.TryGetValue(riga.SaleDocId, out int l) ? l : 0;
-                if (line == 0) line = 1;
-                prossimaLine[riga.SaleDocId] = line + 1;
+            // Un unico batch: target, pulizia delle sole righe gestite, inserimento set-based.
+            // Evita le IN con migliaia di parametri e il COUNT+UPDATE/INSERT per riga.
+            var sql = new StringBuilder();
+            sql.AppendLine("SET NOCOUNT ON;");
+            sql.AppendLine("SELECT DISTINCT Doc.SaleDocId, Doc.SaleOrdId");
+            sql.AppendLine("INTO #target");
+            sql.AppendLine("FROM MA_SaleDoc Testa");
+            sql.AppendLine("INNER JOIN MA_SaleDocDetail Doc ON Testa.SaleDocId = Doc.SaleDocId");
+            sql.AppendLine("WHERE (Doc.LineType = @LineTypeMerce OR Doc.LineType = @LineTypeServizio)");
+            sql.AppendLine("  AND (Testa.DocumentType = @DocFattura OR Testa.DocumentType = @DocFatturaAcc OR Testa.DocumentType = @DocNotaCredito)");
+            sql.AppendLine("  AND (Testa.DocumentDate >= @FromDate AND Testa.DocumentDate <= @ToDate)");
+            sql.AppendLine("  AND (@AllNumbers = 1 OR (@AllNumbers = 0 AND Testa.DocNo >= @NrFirst AND Testa.DocNo <= @NrLast))");
+            sql.AppendLine("  AND Doc.SaleOrdId IS NOT NULL");
+            sql.AppendLine("  AND EXISTS (SELECT 1 FROM ALLOrdCliFattEle fe WHERE fe.IdOrdCli = Doc.SaleOrdId);");
+            sql.AppendLine("DELETE e");
+            sql.AppendLine("FROM MA_EI_ITDocAdditionalData e");
+            sql.AppendLine("INNER JOIN #target t ON t.SaleDocId = e.DocID");
+            sql.AppendLine($"WHERE e.DocSubID = 0 AND e.SubLine = 0 AND e.FieldName IN ({managedFieldNames});");
+            sql.AppendLine("WITH base AS (");
+            sql.AppendLine("    SELECT t.SaleDocId, ISNULL(MAX(e.Line), 0) AS BaseLine");
+            sql.AppendLine("    FROM #target t");
+            sql.AppendLine("    LEFT JOIN MA_EI_ITDocAdditionalData e ON e.DocID = t.SaleDocId");
+            sql.AppendLine("    GROUP BY t.SaleDocId");
+            sql.AppendLine("), ordini AS (");
+            sql.AppendLine("    SELECT t.SaleDocId, t.SaleOrdId,");
+            sql.AppendLine("           CAST(b.BaseLine + ROW_NUMBER() OVER (PARTITION BY t.SaleDocId ORDER BY t.SaleOrdId) AS int) AS Line");
+            sql.AppendLine("    FROM #target t");
+            sql.AppendLine("    INNER JOIN base b ON b.SaleDocId = t.SaleDocId");
+            sql.AppendLine("), righe AS (");
+            sql.AppendLine("    SELECT o.SaleDocId, o.Line, v.FieldName, v.FieldValue");
+            sql.AppendLine("    FROM ordini o");
+            sql.AppendLine("    INNER JOIN ALLOrdCliFattEle r ON r.IdOrdCli = o.SaleOrdId");
+            sql.AppendLine("    CROSS APPLY (VALUES");
+            sql.AppendLine($"            {valuesFe}");
+            sql.AppendLine("    ) v(FieldName, FieldValue)");
+            sql.AppendLine("    WHERE v.FieldValue IS NOT NULL AND v.FieldValue <> ''");
+            sql.AppendLine("), dedup AS (");
+            sql.AppendLine("    SELECT SaleDocId, Line, FieldName, FieldValue,");
+            sql.AppendLine("           ROW_NUMBER() OVER (PARTITION BY SaleDocId, FieldName, FieldValue ORDER BY Line) AS rn");
+            sql.AppendLine("    FROM righe");
+            sql.AppendLine(")");
+            sql.AppendLine("INSERT INTO MA_EI_ITDocAdditionalData (DocID, DocSubID, Line, SubLine, FieldName, FieldValue, TBCreated, TBCreatedID, TBModified, TBModifiedID)");
+            sql.AppendLine("SELECT SaleDocId, 0, Line, 0, FieldName, FieldValue, @now, @User, @now, @User");
+            sql.AppendLine("FROM dedup");
+            sql.AppendLine("WHERE rn = 1;");
+            sql.AppendLine("DECLARE @inseriti int = @@ROWCOUNT;");
+            sql.AppendLine("DROP TABLE #target;");
+            sql.AppendLine("SELECT @inseriti;");
 
-                foreach (var campo in campiFe)
-                {
-                    var prop = fe.GetType().GetProperty(campo.PropName);
-                    var valore = ConvertFeValue(campo.PropName, prop?.GetValue(fe));
-                    if (string.IsNullOrEmpty(valore)) continue;
-                    // Evita righe duplicate con lo stesso valore per la stessa fattura.
-                    if (!visti.Add((riga.SaleDocId, campo.FieldName, valore))) continue;
-                    righeDaScrivere.Add((riga.SaleDocId, line, campo.FieldName, valore));
-                }
-            }
+            using var cmd = new SqlCommand(sql.ToString(), connection, transaction);
+            cmd.CommandTimeout = SqlTools.CommandTimeoutSeconds;
+            cmd.Parameters.Add("@LineTypeMerce", SqlDbType.Int).Value = (int)LineType.Merce;
+            cmd.Parameters.Add("@LineTypeServizio", SqlDbType.Int).Value = (int)LineType.Servizio;
+            cmd.Parameters.Add("@DocFattura", SqlDbType.Int).Value = (int)DocumentType.Fattura;
+            cmd.Parameters.Add("@DocFatturaAcc", SqlDbType.Int).Value = (int)DocumentType.FatturaAccompagnatoria;
+            cmd.Parameters.Add("@DocNotaCredito", SqlDbType.Int).Value = (int)DocumentType.NotaCredito;
+            cmd.Parameters.Add("@FromDate", SqlDbType.VarChar, 8).Value = sFromDate;
+            cmd.Parameters.Add("@ToDate", SqlDbType.VarChar, 8).Value = sToDate;
+            cmd.Parameters.Add("@AllNumbers", SqlDbType.Bit).Value = filtri.AllNumbers;
+            cmd.Parameters.Add("@NrFirst", SqlDbType.VarChar, 10).Value = filtri.NrFirst ?? string.Empty;
+            cmd.Parameters.Add("@NrLast", SqlDbType.VarChar, 10).Value = filtri.NrLast ?? string.Empty;
+            cmd.Parameters.Add("@now", SqlDbType.DateTime).Value = now;
+            cmd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
 
-            if (righeDaScrivere.Count == 0) return 0;
-
-            // Upsert: per ogni (DocId, 0, Line, 0, FieldName) esiste già → UPDATE, altrimenti INSERT.
-            int scritti = 0;
-            foreach (var r in righeDaScrivere)
-            {
-                token.ThrowIfCancellationRequested();
-
-                using var cmdCheck = new SqlCommand(
-                    "SELECT COUNT(*) FROM MA_EI_ITDocAdditionalData WHERE DocID = @DocId AND DocSubID = 0 AND Line = @Line AND SubLine = 0 AND FieldName = @FieldName",
-                    connection, transaction);
-                cmdCheck.CommandTimeout = SqlTools.CommandTimeoutSeconds;
-                cmdCheck.Parameters.Add("@DocId", SqlDbType.Int).Value = r.DocId;
-                cmdCheck.Parameters.Add("@Line", SqlDbType.Int).Value = r.Line;
-                cmdCheck.Parameters.Add("@FieldName", SqlDbType.VarChar, 256).Value = r.FieldName;
-
-                int esiste = (int)cmdCheck.ExecuteScalar();
-
-                if (esiste > 0)
-                {
-                    using var cmdUpd = new SqlCommand(
-                        "UPDATE MA_EI_ITDocAdditionalData SET FieldValue = @FieldValue, TBModified = @DataMod, TBModifiedID = @User WHERE DocID = @DocId AND DocSubID = 0 AND Line = @Line AND SubLine = 0 AND FieldName = @FieldName",
-                        connection, transaction);
-                    cmdUpd.CommandTimeout = SqlTools.CommandTimeoutSeconds;
-                    cmdUpd.Parameters.Add("@DocId", SqlDbType.Int).Value = r.DocId;
-                    cmdUpd.Parameters.Add("@Line", SqlDbType.Int).Value = r.Line;
-                    cmdUpd.Parameters.Add("@FieldName", SqlDbType.VarChar, 256).Value = r.FieldName;
-                    cmdUpd.Parameters.Add("@FieldValue", SqlDbType.VarChar, 256).Value = r.FieldValue;
-                    cmdUpd.Parameters.Add("@DataMod", SqlDbType.VarChar, 8).Value = now.ToString("yyyyMMdd");
-                    cmdUpd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
-                    cmdUpd.ExecuteNonQuery();
-                }
-                else
-                {
-                    using var cmdIns = new SqlCommand(
-                        "INSERT INTO MA_EI_ITDocAdditionalData (DocID, DocSubID, Line, SubLine, FieldName, FieldValue, TBCreated, TBCreatedID, TBModified, TBModifiedID) VALUES (@DocId, 0, @Line, 0, @FieldName, @FieldValue, GETDATE(), @User, GETDATE(), @User)",
-                        connection, transaction);
-                    cmdIns.CommandTimeout = SqlTools.CommandTimeoutSeconds;
-                    cmdIns.Parameters.Add("@DocId", SqlDbType.Int).Value = r.DocId;
-                    cmdIns.Parameters.Add("@Line", SqlDbType.Int).Value = r.Line;
-                    cmdIns.Parameters.Add("@FieldName", SqlDbType.VarChar, 256).Value = r.FieldName;
-                    cmdIns.Parameters.Add("@FieldValue", SqlDbType.VarChar, 256).Value = r.FieldValue;
-                    cmdIns.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
-                    cmdIns.ExecuteNonQuery();
-                }
-                scritti++;
-            }
-
-            return scritti;
-        }
-
-        private static string? GetStringOrNull(Microsoft.Data.SqlClient.SqlDataReader reader, string columnName)
-        {
-            int ordinal;
-            try { ordinal = reader.GetOrdinal(columnName); }
-            catch { return null; }
-            if (reader.IsDBNull(ordinal)) return null;
-            return reader.GetString(ordinal);
+            token.ThrowIfCancellationRequested();
+            return Convert.ToInt32(cmd.ExecuteScalar());
         }
 
         private static readonly Dictionary<string, int> CausaliPagamentoFe = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
@@ -327,22 +228,20 @@ namespace FatturazioneContratti.Invoicing
             { "M2", 32440348 }, { "ZO", 32440349 }
         };
 
-        private static string? ConvertFeValue(string propName, object? raw)
+        private static string SqlFeValueExpression(string propName)
         {
-            if (raw is null) return null;
             if (propName == "F2_1_1_5_4")
             {
-                var s = raw as string;
-                if (string.IsNullOrWhiteSpace(s)) return null;
-                if (CausaliPagamentoFe.TryGetValue(s.Trim(), out int id)) return id.ToString();
-                return null;
+                var causali = string.Join(", ", CausaliPagamentoFe
+                    .Where(kv => kv.Key.Length > 0)
+                    .Select(kv => $"('{kv.Key}', {kv.Value})"));
+                return $"(SELECT c.Id FROM (VALUES {causali}) c(Lettera, Id) WHERE c.Lettera = UPPER(LTRIM(RTRIM(ISNULL(r.{propName}, '')))))";
             }
-            if (raw is string str) return string.IsNullOrWhiteSpace(str) ? null : str.Trim();
-            if (raw is DateTime dt) return dt.ToString("dd/MM/yyyy");
-            if (raw is short sh) return sh.ToString();
-            if (raw is int i) return i.ToString();
-            if (raw is long l) return l.ToString();
-            return raw.ToString();
+            var parts = propName.Split('_');
+            var suffisso = parts.Length >= 4 ? parts[3] : string.Empty;
+            if (suffisso == "1") return $"CONVERT(varchar(10), r.{propName})";
+            if (suffisso == "3") return $"CONVERT(varchar(10), r.{propName}, 103)";
+            return $"NULLIF(LTRIM(RTRIM(r.{propName})), '')";
         }
     }
 }
