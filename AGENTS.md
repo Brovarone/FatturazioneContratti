@@ -60,6 +60,7 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 | `FattureContextExtensions.AddNew<T>()` | Crea istanza entità con tutti i `HasDefaultValueSql` applicati (replica VB `DataSet.AddNew`). Inizializzatori cachati **per `IModel`**, non per tipo |
 | `StringHelpers.SubstringSafe` | Troncamento sicuro (trim + max len), mai null — usato dai servizi su campi nota |
 | `MagoEnum.cs` | `LineType`, `DocumentType`, `CrossReference` — valori FK Mago. Usare gli enum, mai numeri hardcoded |
+| `MagoConstants` | Dizionario `CausaliPagamento` — causali pagamento fattura elettronica (lettera → ID Mago), condiviso tra `ConsuntivoService` e `AggiornamentoFattureService` |
 | `LogDiagnostica.cs` | Routing log centralizzato: `Informativo` → `LogMode`, `Errore`/`Avviso` → `Both`, `LogFiltri` e statistiche bulk → `File`, `Blocco`, `Scarica(...)` chiamata nei `finally` dei workflow |
 | `ILogFiltri.cs` | Contratto `CostruisciFiltriLog()` / `LogFiltri` implementato dai 3 DTO filtri |
 | `CrashLogger.cs` | Log crash globale (`crash_yyyyMMdd_HHmmss_fff.log`), chiamato dai handler in `Program.cs` |
@@ -76,7 +77,7 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
   - Accumula cambiamenti in memoria → singola transazione bulk finale; `EseguiSalvataggioTransazionale` ritorna `bool` e `[COMPLETATO]` esce solo senza errori
   - `CancellationToken` controllato ai confini di ordine/contratto/blocco; se arriva con transazione aperta → rollback esplicito + throw
 - **ConsuntivoService** — `ControllaFlussoIntegra()` (valida interventi), `GeneraFattureConsuntivo()` (bulk-insert fatture)
-  - Usa mapping hardcoded: `FilialiMapping`, `MappingsEventoIntegra`, `CausaliPagamentoFatturaElettronica`
+  - Usa mapping hardcoded: `FilialiMapping`, `MappingsEventoIntegra`, `MagoConstants.CausaliPagamento`
   - Logica raggruppamento fatture in `Break()` — rispetta flag `MaSalesOrdParameters` fulfillment break
   - **Regola cessazione**: si fattura se il contratto è attivo (`DataCessazione == DataNulla`) **oppure** se la cessazione è ≥ `Filtri.DataFattura` (ultimo mese utile). Non si fattura più solo per i contratti cessati (bug ereditato da `OrdiniConsuntivi.vb`). Se un contratto **è già cessato alla data fattura** ma ha interventi nel periodo: a video solo il riepilogo `[AVVISO] Trovati X interventi su Y contratti cessati`, dettaglio per ordine solo su file
   - `FiltriOrdiniConsuntivo.ProseguiAnomalie` ("Prosegui comunque"): prosegue con anomalie **non critiche** (contratti mancanti / eventi non associati); le anomalie critiche (duplicati) bloccano sempre
