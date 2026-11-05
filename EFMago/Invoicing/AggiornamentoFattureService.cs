@@ -198,7 +198,7 @@ namespace FatturazioneContratti.Invoicing
             sql.AppendLine("WHERE rn = 1;");
             sql.AppendLine("DECLARE @inseriti int = @@ROWCOUNT;");
             sql.AppendLine("DROP TABLE #target;");
-            sql.AppendLine("SELECT @documenti, @campi;");
+            sql.AppendLine("SELECT @documenti, @inseriti;");
 
             using var cmd = new SqlCommand(sql.ToString(), connection, transaction);
             cmd.CommandTimeout = SqlTools.CommandTimeoutSeconds;
