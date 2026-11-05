@@ -76,17 +76,19 @@ namespace FatturazioneContratti.Invoicing
 
                 int irows = cmd.ExecuteNonQuery();
                 LogDiagnostica.Informativo(logMessage, irows <= 0
-                    ? "Nessun documento di vendita da aggiornare"
-                    : $"Adeguate {irows} righe canoni.");
+                    ? "Nessuna riga canoni da allineare: ALL_CanoniDataI è già valorizzata o non ci sono fatture collegate a ordini nel periodo."
+                    : $"Allineate {irows} righe canoni (date di competenza ALL_CanoniDataI).");
 
                 // --- OPERAZIONE B: upsert dati fattura elettronica ---
                 if (filtri.SincronizzaFatturaElettronica)
                 {
                     token.ThrowIfCancellationRequested();
-                    int feRows = UpsertDatiFatturaElettronica(connection, transaction, filtri, now, loginId, logMessage, token);
-                    LogDiagnostica.Informativo(logMessage, feRows <= 0
-                        ? "Nessun dato fattura elettronica da sincronizzare"
-                        : $"Sincronizzati {feRows} dati fattura elettronica.");
+                    (int documenti, int righe) = UpsertDatiFatturaElettronica(connection, transaction, filtri, now, loginId, logMessage, token);
+                    LogDiagnostica.Informativo(logMessage, documenti <= 0
+                        ? "Nessun documento di vendita con dati fattura elettronica da sincronizzare"
+                        : documenti == 1
+                            ? $"Sincronizzati dati fattura elettronica su 1 documento ({righe} righe)."
+                            : $"Sincronizzati dati fattura elettronica su {documenti} documenti ({righe} righe).");
                 }
 
                 return true;
@@ -104,7 +106,7 @@ namespace FatturazioneContratti.Invoicing
             }
         }
 
-        private static int UpsertDatiFatturaElettronica(
+        private static (int Documenti, int Righe) UpsertDatiFatturaElettronica(
             SqlConnection connection,
             SqlTransaction transaction,
             FiltriAllineamentoFatture filtri,
@@ -162,6 +164,7 @@ namespace FatturazioneContratti.Invoicing
             sql.AppendLine("  AND (@AllNumbers = 1 OR (@AllNumbers = 0 AND Testa.DocNo >= @NrFirst AND Testa.DocNo <= @NrLast))");
             sql.AppendLine("  AND Doc.SaleOrdId IS NOT NULL");
             sql.AppendLine("  AND EXISTS (SELECT 1 FROM ALLOrdCliFattEle fe WHERE fe.IdOrdCli = Doc.SaleOrdId);");
+            sql.AppendLine("DECLARE @documenti int = (SELECT COUNT(DISTINCT SaleDocId) FROM #target);");
             sql.AppendLine("DELETE e");
             sql.AppendLine("FROM MA_EI_ITDocAdditionalData e");
             sql.AppendLine("INNER JOIN #target t ON t.SaleDocId = e.DocID");
@@ -195,7 +198,7 @@ namespace FatturazioneContratti.Invoicing
             sql.AppendLine("WHERE rn = 1;");
             sql.AppendLine("DECLARE @inseriti int = @@ROWCOUNT;");
             sql.AppendLine("DROP TABLE #target;");
-            sql.AppendLine("SELECT @inseriti;");
+            sql.AppendLine("SELECT @documenti, @inseriti;");
 
             using var cmd = new SqlCommand(sql.ToString(), connection, transaction);
             cmd.CommandTimeout = SqlTools.CommandTimeoutSeconds;
@@ -213,7 +216,9 @@ namespace FatturazioneContratti.Invoicing
             cmd.Parameters.Add("@User", SqlDbType.SmallInt, 32).Value = loginId;
 
             token.ThrowIfCancellationRequested();
-            return Convert.ToInt32(cmd.ExecuteScalar());
+            using var reader = cmd.ExecuteReader();
+            reader.Read();
+            return (Convert.ToInt32(reader.GetValue(0)), Convert.ToInt32(reader.GetValue(1)));
         }
 
         private static readonly Dictionary<string, int> CausaliPagamentoFe = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
