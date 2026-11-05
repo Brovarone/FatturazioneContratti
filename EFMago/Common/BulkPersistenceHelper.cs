@@ -38,27 +38,32 @@ namespace FatturazioneContratti.Common
             // Richiesta già arrivata prima di aprire la transazione: nessun accesso al DB.
             token.ThrowIfCancellationRequested();
 
-            using var bulkTrans = context.Database.BeginTransaction();
-            bool traceOnExecuted = false;
-
-            try
+            // SqlServerRetryingExecutionStrategy non supporta transazioni aperte a mano:
+            // tutta l'unità transazione + bulk operazioni deve eseguirsi sotto
+            // CreateExecutionStrategy(), così è ripetibile come unitario.
+            return context.Database.CreateExecutionStrategy().Execute(() =>
             {
-                context.Database.ExecuteSqlRaw("DBCC TRACEON(610)");
-                traceOnExecuted = true;
+                using var bulkTrans = context.Database.BeginTransaction();
+                bool traceOnExecuted = false;
 
-                // Check a transazione aperta: se nel frattempo è arrivata l'interruzione
-                // si rollbacka subito senza eseguire alcuna bulk.
-                token.ThrowIfCancellationRequested();
+                try
+                {
+                    context.Database.ExecuteSqlRaw("DBCC TRACEON(610)");
+                    traceOnExecuted = true;
 
-                executeActions();
+                    // Check a transazione aperta: se nel frattempo è arrivata l'interruzione
+                    // si rollbacka subito senza eseguire alcuna bulk.
+                    token.ThrowIfCancellationRequested();
 
-                // Ultimo check prima del commit: interruzione arrivata durante le bulk.
-                token.ThrowIfCancellationRequested();
+                    executeActions();
 
-                bulkTrans.Commit();
-                return true;
-            }
-            catch (OperationCanceledException)
+                    // Ultimo check prima del commit: interruzione arrivata durante le bulk.
+                    token.ThrowIfCancellationRequested();
+
+                    bulkTrans.Commit();
+                    return true;
+                }
+                catch (OperationCanceledException)
             {
                 // Interruzione utente: rollback esplicito e propagazione (il chiamante
                 // la tratta come "interrotto", non come errore critico).
@@ -93,7 +98,8 @@ namespace FatturazioneContratti.Common
                     }
                 }
             }
-        }
+        });
+    }
 
         /// <summary>
         /// Esegue la bulk operation in UNA sola chiamata.
