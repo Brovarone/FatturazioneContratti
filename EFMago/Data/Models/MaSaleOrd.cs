@@ -157,7 +157,7 @@ namespace EFMago.Data.Models
     }
     public class SaleOrdIdComparer : IEqualityComparer<MaSaleOrd>
     {
-        public bool Equals(MaSaleOrd? x, MaSaleOrd? y)
+        public bool Equals(MaSaleOrd x, MaSaleOrd y)
         {
             if (ReferenceEquals(x, y)) return true;
             if (x is null || y is null) return false;

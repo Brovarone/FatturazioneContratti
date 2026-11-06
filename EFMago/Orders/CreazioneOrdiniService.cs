@@ -1,7 +1,6 @@
 using EFMago.Common;
 using EFMago.Data;
 using EFMago.Data.Models;
-using EFMago.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System;
