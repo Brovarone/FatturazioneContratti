@@ -4,12 +4,12 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using EFCore.BulkExtensions;
-using EFMago.Models;
-using FatturazioneContratti.Common;
-using FatturazioneContratti.Data;
+using EFMago.Data.Models;
+using EFMago.Common;
+using EFMago.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     public partial class GenerazioneRigheOrdiniService
     {

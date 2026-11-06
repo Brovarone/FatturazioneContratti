@@ -1,12 +1,13 @@
-using EFMago.Models;
-using FatturazioneContratti.Common;
+using EFMago.Common;
+using EFMago.Data.Models;
+using EFMago.Common;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     /// <summary>
     /// Scrittura delle tabelle contratto collegate all'ordine (ALLOrdCli*).

@@ -1,6 +1,6 @@
 using System;
 
-namespace FatturazioneContratti.Common
+namespace EFMago.Common
 {
     /// <summary>
     /// Porting delle costanti sparse in Ordini.vb (decPerc/decValUnit/decTax) e in

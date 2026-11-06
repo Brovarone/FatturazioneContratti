@@ -1,8 +1,9 @@
 using System;
 using System.Windows.Forms;
+using EFMago.Common;
 using FatturazioneContratti.Common;
 using FatturazioneContratti.Config;
-using FatturazioneContratti.Forms; // <-- Assicurati che corrisponda al namespace della tua FLogin
+using FatturazioneContratti.Forms; 
 
 namespace FatturazioneContratti
 {

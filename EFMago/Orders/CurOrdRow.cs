@@ -1,8 +1,8 @@
 using System;
-using EFMago.Models;
-using FatturazioneContratti.Common;
+using EFMago.Data.Models;
+using EFMago.Common;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     /// <summary>
     /// Porting 1:1 di CurOrdRow.vb (3tables/Ordini/CurOrdRow.vb, 421 righe).
@@ -85,7 +85,7 @@ namespace FatturazioneContratti.Orders
         public required CurOrd Parent { get; set; }
         public string ContrattoFox { get; set; } = string.Empty;
         public string CodiceIntegra { get; set; } = string.Empty;
-        public FatturazioneContratti.Common.TipologiaServizio TipologiaServizio { get; set; } = FatturazioneContratti.Common.TipologiaServizio.Canone;
+        public EFMago.Common.TipologiaServizio TipologiaServizio { get; set; } = EFMago.Common.TipologiaServizio.Canone;
 
         // Da qua sono per i servizi aggiuntivi
         public int AnnoIntervento { get; set; }
@@ -144,12 +144,12 @@ namespace FatturazioneContratti.Orders
             PeriodoDataFin = d;
 
             var tipoRiga = c.AlltipoRigaServizio;
-            TipologiaServizio = (FatturazioneContratti.Common.TipologiaServizio)(tipoRiga.TipologiaServizio ?? 0);
-            IsCanone = TipologiaServizio == FatturazioneContratti.Common.TipologiaServizio.Canone;
-            IsConsuntivo = TipologiaServizio == FatturazioneContratti.Common.TipologiaServizio.Consuntivo;
-            IsUnaTantum = TipologiaServizio == FatturazioneContratti.Common.TipologiaServizio.UnaTantum;
-            IsAConsumo = TipologiaServizio == FatturazioneContratti.Common.TipologiaServizio.AConsumo;
-            IsContinuativo = TipologiaServizio == FatturazioneContratti.Common.TipologiaServizio.Continuativo;
+            TipologiaServizio = (EFMago.Common.TipologiaServizio)(tipoRiga.TipologiaServizio ?? 0);
+            IsCanone = TipologiaServizio == EFMago.Common.TipologiaServizio.Canone;
+            IsConsuntivo = TipologiaServizio == EFMago.Common.TipologiaServizio.Consuntivo;
+            IsUnaTantum = TipologiaServizio == EFMago.Common.TipologiaServizio.UnaTantum;
+            IsAConsumo = TipologiaServizio == EFMago.Common.TipologiaServizio.AConsumo;
+            IsContinuativo = TipologiaServizio == EFMago.Common.TipologiaServizio.Continuativo;
             // ATTENZIONE - punto da verificare: il VB fa CBool(c.AlltipoRigaServizio.Campagna)
             // su un campo string. CBool in VB accetta "True"/"False" (case-insensitive) e
             // stringhe numeriche (0 = False, tutto il resto = True). Qui riproduco la stessa
@@ -160,8 +160,8 @@ namespace FatturazioneContratti.Orders
             CodiceIntegra = c.CodIntegra;
 
             int iNrCanoni = 0;
-            var periodicita = (FatturazioneContratti.Common.Periodo)(tipoRiga.Periodicita ?? 0);
-            var cadenza = (FatturazioneContratti.Common.Cadenza)(tipoRiga.Cadenza ?? 0);
+            var periodicita = (EFMago.Common.Periodo)(tipoRiga.Periodicita ?? 0);
+            var cadenza = (EFMago.Common.Cadenza)(tipoRiga.Cadenza ?? 0);
 
             // Canoni e valori a Consumo seguono il corso delle cadenze pertanto considero i mesi
             if (IsCanone || IsAConsumo || IsContinuativo)
@@ -174,12 +174,12 @@ namespace FatturazioneContratti.Orders
                 {
                     iNrCanoni = periodicita switch
                     {
-                        FatturazioneContratti.Common.Periodo.Annuale => 12,
-                        FatturazioneContratti.Common.Periodo.Semestrale => 6,
-                        FatturazioneContratti.Common.Periodo.Quadrimestrale => 4,
-                        FatturazioneContratti.Common.Periodo.Trimestrale => 3,
-                        FatturazioneContratti.Common.Periodo.Bimestrale => 2,
-                        FatturazioneContratti.Common.Periodo.Mensile => 1,
+                        EFMago.Common.Periodo.Annuale => 12,
+                        EFMago.Common.Periodo.Semestrale => 6,
+                        EFMago.Common.Periodo.Quadrimestrale => 4,
+                        EFMago.Common.Periodo.Trimestrale => 3,
+                        EFMago.Common.Periodo.Bimestrale => 2,
+                        EFMago.Common.Periodo.Mensile => 1,
                         _ => 0,
                     };
                 }
@@ -187,7 +187,7 @@ namespace FatturazioneContratti.Orders
                 // 28/02/2022: Devono sempre essere primo del mese / fine mese
                 // 23/03/2022: Creo una nuova data per i POSTICIPATI che e' sempre fine mese
                 //             e sempre il primo per gli ANTICIPATI
-                if (cadenza == FatturazioneContratti.Common.Cadenza.Anticipato)
+                if (cadenza == EFMago.Common.Cadenza.Anticipato)
                 {
                     var nextDateAnt = new DateTime(nextDate.Year, nextDate.Month, 1);
                     // Sempre il primo del mese
@@ -286,7 +286,7 @@ namespace FatturazioneContratti.Orders
             CanoniDataFin = d;
             PeriodoDataIn = d;
             PeriodoDataFin = d;
-            TipologiaServizio = (FatturazioneContratti.Common.TipologiaServizio)(s.AlltipoRigaServizio.TipologiaServizio ?? 0);
+            TipologiaServizio = (EFMago.Common.TipologiaServizio)(s.AlltipoRigaServizio.TipologiaServizio ?? 0);
             AnnoIntervento = s.AnnoIntervento ?? 0;
             NrInterventiFranchigia = s.NrInterventiInFranchigia ?? 0;
             NrInterventiMese = s.NrInterventiMese ?? 0;
@@ -314,31 +314,31 @@ namespace FatturazioneContratti.Orders
         /// La data è sempre il primo del mese ed è già adeguata/nuova, occorre solo
         /// correggerla se esce dai range.
         /// </summary>
-        private static DateTime CalcolaDataProssimaFattura(DateTime dataFine, FatturazioneContratti.Common.Periodo periodo)
+        private static DateTime CalcolaDataProssimaFattura(DateTime dataFine, EFMago.Common.Periodo periodo)
         {
             int m = dataFine.Month;
             return periodo switch
             {
-                FatturazioneContratti.Common.Periodo.Annuale => new DateTime(dataFine.Year, 1, 1),
-                FatturazioneContratti.Common.Periodo.Semestrale =>
+                EFMago.Common.Periodo.Annuale => new DateTime(dataFine.Year, 1, 1),
+                EFMago.Common.Periodo.Semestrale =>
                     m >= 7 ? new DateTime(dataFine.Year, 7, 1) : new DateTime(dataFine.Year, 1, 1),
-                FatturazioneContratti.Common.Periodo.Quadrimestrale =>
+                EFMago.Common.Periodo.Quadrimestrale =>
                     m >= 9 ? new DateTime(dataFine.Year, 9, 1)
                     : m >= 5 ? new DateTime(dataFine.Year, 5, 1)
                     : new DateTime(dataFine.Year, 1, 1),
-                FatturazioneContratti.Common.Periodo.Trimestrale =>
+                EFMago.Common.Periodo.Trimestrale =>
                     m >= 10 ? new DateTime(dataFine.Year, 10, 1)
                     : m >= 7 ? new DateTime(dataFine.Year, 7, 1)
                     : m >= 4 ? new DateTime(dataFine.Year, 4, 1)
                     : new DateTime(dataFine.Year, 1, 1),
-                FatturazioneContratti.Common.Periodo.Bimestrale =>
+                EFMago.Common.Periodo.Bimestrale =>
                     m >= 11 ? new DateTime(dataFine.Year, 11, 1)
                     : m >= 9 ? new DateTime(dataFine.Year, 9, 1)
                     : m >= 7 ? new DateTime(dataFine.Year, 7, 1)
                     : m >= 5 ? new DateTime(dataFine.Year, 5, 1)
                     : m >= 3 ? new DateTime(dataFine.Year, 3, 1)
                     : new DateTime(dataFine.Year, 1, 1),
-                FatturazioneContratti.Common.Periodo.Mensile => dataFine,
+                EFMago.Common.Periodo.Mensile => dataFine,
                 _ => dataFine,
             };
         }

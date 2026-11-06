@@ -1,4 +1,4 @@
-namespace FatturazioneContratti.Common
+namespace EFMago.Common
 {
     /// <summary>
     /// Porting degli enum definiti in Ordini.vb (righe ~15-38 di 3tables/Ordini/Ordini.vb).

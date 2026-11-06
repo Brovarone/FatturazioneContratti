@@ -1,8 +1,8 @@
 using System;
-using EFMago.Models;
-using FatturazioneContratti.Common;
+using EFMago.Data.Models;
+using EFMago.Common;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     /// <summary>
     /// Porting 1:1 delle funzioni pure di calcolo di Ordini.vb (righe 1272-1483):

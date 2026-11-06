@@ -1,7 +1,7 @@
-using EFMago.Models;
-using FatturazioneContratti.Common;
-using FatturazioneContratti.Data;
-using FatturazioneContratti.Orders;
+using EFMago.Data.Models;
+using EFMago.Common;
+using EFMago.Data;
+using EFMago.Orders;
 using Microsoft.EntityFrameworkCore;
 
 // ---------------------------------------------------------------------------

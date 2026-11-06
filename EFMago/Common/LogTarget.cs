@@ -1,4 +1,4 @@
-namespace FatturazioneContratti.Common
+namespace EFMago.Common
 {
     /// <summary>
     /// Destinazione di un messaggio di log.

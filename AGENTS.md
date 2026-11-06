@@ -43,7 +43,7 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 
 ### Data Layer (`EFMago/Data/`)
 - `FattureContext` — **DbContext manuale** (non generato). Contiene `OnModelCreating` con 100+ entity configurations, relazioni custom, `HasDefaultValueSql` per default Mago. **Modificare direttamente qui** quando serve.
-- `Data/Models/` — **Generati** da `copia.ps1` (copia 100+ classi entità da `ALLMigrazione\EFMago\Models\`). Non modificare a mano.
+- `Data/Models/` — **Generati dal DB** (classi entità EF Core). Contengono `#nullable disable` per disabilitare i NRT. Non modificare a mano; verranno allineati da un tool dedicato in futuro.
 - `SqlTools.CreateContext()` — factory; rispetta `EfmagoOptions` + flag `IsDebugging` (registrate dall'ospite via `Configure`).
 - `SqlTools.OpenDirectConnection()` — `SqlConnection` raw con `ARITHABORT ON` (richiesto per indici filtrati Mago).
 - `SqlTools.CommandTimeoutSeconds = 600` — timeout unico dei comandi: applicato in `CreateContext()` e da passare ai `SqlCommand` raw (il default ADO di 30s e i 180s EF andavano in timeout sulle query grosse).
@@ -120,19 +120,12 @@ Estratta dal WinForms per essere condivisa col futuro sito Blazor (scissione del
 ## Comandi Sviluppatore
 
 ### Aggiorna Modelli Entità (quando cambia schema Mago / migrazione ERP)
-```powershell
-# Da root repo; copia SOLO i model (classi entità) da ALLMigrazione
-# Destinazione: EFMago/Data\ ( Models\ + FattureContext.cs )
-.\copia.ps1
-```
-Poi rebuild. **Il `FattureContext.cs` NON viene toccato** — aggiornare manualmente `OnModelCreating` se servono nuove relazioni/colonne.
-
-> **NOTA FUTURA**: `copia.ps1` è il meccanismo attuale ma **probabilmente verrà sostituito** da un tool/app separata (non in questo repo) per gestire scaffold + sync modelli + context in modo più robusto. Fino ad allora, usa lo script.
+I model in `EFMago/Data/Models/` sono generati dal database e non vanno modificati a mano. L'allineamento con eventuali cambi di schema Mago sarà gestito da un tool dedicato (in fase di realizzazione) che legge le tabelle dal DB, le confronta con lo stato attuale e provvede ad aggiungere/correggere quanto cambiato. Stesso ragionamento per `FattureContext.cs` (manuale, da allineare tramite lo stesso tool).
 
 ### Checklist post-migrazione ERP (DA FARE)
 Quando il programma ERP Mago viene migrato/aggiornato (nuova versione, nuovi campi, nuove tabelle):
 1. **Scaffold entità nuove/modificate** nel progetto `ALLMigrazione\EFMago` → `dotnet ef dbcontext scaffold ...`
-2. **Esegui `copia.ps1`** (meccanismo transitorio) per riversare i model aggiornati in `Data/Models/`
+2. **Allinea i model** tramite il tool dedicato (scaffolding + sync da DB; `copia.ps1` non esiste più).
 3. **Aggiorna `FattureContext.cs` manualmente**:
    - Nuovi `DbSet<T>` per tabelle inedite
    - Nuove proprietà di navigazione / chiavi esterne in `OnModelCreating`
@@ -179,7 +172,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 ## Mappa Proprietà File
 | Directory | Proprietario | Note |
 |-----------|--------------|------|
-| `EFMago/Data/Models/` | **Generati** — modifica solo via `copia.ps1` |
+| `EFMago/Data/Models/` | **Generati dal DB** — contengono `#nullable disable`, allineati da tool dedicato (futuro) |
 | `EFMago/Data/FattureContext.cs` | **Manuale** — DbContext custom, `OnModelCreating` mantenuto a mano |
 | `EFMago/Common/` | Primitive dominio condivise (enum, costanti, estensioni) — libreria |
 | `EFMago/Orders/` | Logica generazione canoni/ISTAT — libreria |
@@ -194,7 +187,7 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 ## Task Comuni
 
 ### Aggiungere nuova tabella Mago
-1. Aggiungi a progetto EF `ALLMigrazione` → scaffold → esegui `copia.ps1` (copia il model in `EFMago/Data/Models/`)
+1. Aggiungi a progetto EF `ALLMigrazione` → scaffold → allinea i model tramite il tool dedicato (futuro)
 2. In `FattureContext.cs`: aggiungi `DbSet<T>` + configurazione in `OnModelCreating` (chiavi, relazioni, `HasDefaultValueSql`)
 3. Se serve `AddNew<T>()` support: nessuna modifica codice (estensione legge default Fluent API automaticamente)
 
@@ -222,5 +215,5 @@ Imposta `AppConfig.IsDebugging = true` (da Settings dialog o JSON). Abilita:
 
 ## Riferimenti
 - `MigrazioneVb_Csharp.txt` — checklist riassuntiva migrazione
-- `copia.ps1` — script copia model (solo entità, NON DbContext)
+- (rimosso: `copia.ps1` eliminato, sostituito da tool dedicato futuro)
 - `TODO.md` — solo lavoro aperto: verifica manuale, punti noti da decidere, fasi residue del sito

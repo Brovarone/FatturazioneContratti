@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
-using FatturazioneContratti.Common;
+using EFMago.Common;
 using FatturazioneContratti.Config;
-using FatturazioneContratti.Data;
+using EFMago.Data;
 
 namespace FatturazioneContratti.Forms
 {

@@ -1,8 +1,8 @@
 using System;
-using EFMago.Models;
-using FatturazioneContratti.Common;
+using EFMago.Data.Models;
+using EFMago.Common;
 
-namespace FatturazioneContratti.Invoicing
+namespace EFMago.Invoicing
 {
     public class CurFattRow
     {

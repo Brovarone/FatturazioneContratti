@@ -1,9 +1,9 @@
-﻿using System;
-using EFMago.Models;
+using System;
+using EFMago.Data.Models;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
-namespace FatturazioneContratti.Data
+namespace EFMago.Data
 {
     public static class SqlTools
     {

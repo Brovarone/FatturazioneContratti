@@ -1,4 +1,4 @@
-using FatturazioneContratti.Invoicing;
+using EFMago.Invoicing;
 using System;
 using System.Windows.Forms;
 

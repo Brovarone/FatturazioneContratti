@@ -1,7 +1,7 @@
-using EFMago.Models;
+using EFMago.Data.Models;
 using System.Collections.Generic;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     /// <summary>
     /// Default ERP di vendita/IVA caricati una sola volta per elaborazione:

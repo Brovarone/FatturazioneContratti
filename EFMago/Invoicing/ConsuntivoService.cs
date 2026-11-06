@@ -1,14 +1,15 @@
 using EFCore.BulkExtensions;
-using EFMago.Models;
-using FatturazioneContratti.Common;
-using FatturazioneContratti.Orders;
+using EFMago.Data;
+using EFMago.Data.Models;
+using EFMago.Common;
+using EFMago.Invoicing;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace FatturazioneContratti.Invoicing
+namespace EFMago.Invoicing
 {
     public class ConsuntivoService
     {
@@ -754,7 +755,7 @@ namespace FatturazioneContratti.Invoicing
                                         };
 
                                         var taxRow = codiciIva.FirstOrDefault(tax => tax.TaxCode == cFattRow.CodIva);
-                                        cFattRow.PercIva = Math.Round((double)(taxRow?.Perc ?? (cFattura.PercIva ?? 0)), DomainConstants.DecimaliPercentuale);
+                                        cFattRow.PercIva = Math.Round((double)(taxRow?.Perc ?? cFattura.PercIva ?? 0), DomainConstants.DecimaliPercentuale);
 
                                         // Codice contratto da riportare sulla riga: quello della distinta
                                         // (coincide con i.Contratto degli interventi associati). Fallback
@@ -866,7 +867,7 @@ namespace FatturazioneContratti.Invoicing
                             {
                                 SaleDocId = cFattura.SaleDocId,
                                 DocumentType = (int)DocumentType.Fattura,
-                                AccTpl = (cFattura.Cliente?.CustSuppKind == (int)CustSuppKind.Nazionale) ? defVendite.InvoiceAccTpl : defVendite.EuinvoiceAccTpl,
+                                AccTpl = cFattura.Cliente?.CustSuppKind == (int)CustSuppKind.Nazionale ? defVendite.InvoiceAccTpl : defVendite.EuinvoiceAccTpl,
                                 CustSupp = cFattura.CodCliente,
                                 CustSuppType = 3211264,
                                 DocumentDate = cFattura.DataFattura,
@@ -1179,15 +1180,15 @@ namespace FatturazioneContratti.Invoicing
                 testaFattura.Payment != ordine.Payment ||
                 testaFattura.Currency != ordine.Currency ||
                 testaFattura.Salesperson != ordine.Salesperson ||
-                (!string.IsNullOrEmpty(testaFattura.Salesperson) && (
+                !string.IsNullOrEmpty(testaFattura.Salesperson) && (
                     testaFattura.SalespersonPolicy != ordine.SalespersonPolicy ||
                     testaFattura.SalespersonCommAuto != ordine.SalespersonCommAuto ||
-                    testaFattura.SalespersonCommPercAuto != ordine.SalespersonCommPercAuto)) ||
+                    testaFattura.SalespersonCommPercAuto != ordine.SalespersonCommPercAuto) ||
                 testaFattura.AreaManager != ordine.AreaManager ||
-                (!string.IsNullOrEmpty(testaFattura.AreaManager) && (
+                !string.IsNullOrEmpty(testaFattura.AreaManager) && (
                     testaFattura.AreaManagerPolicy != ordine.AreaManagerPolicy ||
                     testaFattura.AreaManagerCommAuto != ordine.AreaManagerCommAuto ||
-                    testaFattura.AreaManagerCommPercAuto != ordine.AreaManagerCommPercAuto)) ||
+                    testaFattura.AreaManagerCommPercAuto != ordine.AreaManagerCommPercAuto) ||
                 options.OneInvoicePerOrder == "1")
             {
                 return true;
@@ -1218,8 +1219,8 @@ namespace FatturazioneContratti.Invoicing
             {
                 Periodo.Annuale => isFrom ? new DateTime(y, 1, 1) : new DateTime(y, 12, 31, 23, 59, 59),
                 Periodo.Semestrale => m <= 6
-                    ? (isFrom ? new DateTime(y, 1, 1) : new DateTime(y, 6, 30, 23, 59, 59))
-                    : (isFrom ? new DateTime(y, 7, 1) : new DateTime(y, 12, 31, 23, 59, 59)),
+                    ? isFrom ? new DateTime(y, 1, 1) : new DateTime(y, 6, 30, 23, 59, 59)
+                    : isFrom ? new DateTime(y, 7, 1) : new DateTime(y, 12, 31, 23, 59, 59),
                 Periodo.Quadrimestrale => m switch
                 {
                     <= 4 => isFrom ? new DateTime(y, 1, 1) : new DateTime(y, 4, 30, 23, 59, 59),
@@ -1233,9 +1234,9 @@ namespace FatturazioneContratti.Invoicing
                     <= 9 => isFrom ? new DateTime(y, 7, 1) : new DateTime(y, 9, 30, 23, 59, 59),
                     _ => isFrom ? new DateTime(y, 10, 1) : new DateTime(y, 12, 31, 23, 59, 59)
                 },
-                Periodo.Bimestrale => (m % 2 == 1)
-                    ? (isFrom ? new DateTime(y, m, 1) : new DateTime(y, m + 1, DateTime.DaysInMonth(y, m + 1), 23, 59, 59))
-                    : (isFrom ? new DateTime(y, m - 1, 1) : new DateTime(y, m, DateTime.DaysInMonth(y, m), 23, 59, 59)),
+                Periodo.Bimestrale => m % 2 == 1
+                    ? isFrom ? new DateTime(y, m, 1) : new DateTime(y, m + 1, DateTime.DaysInMonth(y, m + 1), 23, 59, 59)
+                    : isFrom ? new DateTime(y, m - 1, 1) : new DateTime(y, m, DateTime.DaysInMonth(y, m), 23, 59, 59),
                 _ => isFrom ? new DateTime(y, m, 1) : new DateTime(y, m, DateTime.DaysInMonth(y, m), 23, 59, 59)
             };
         }
@@ -1251,7 +1252,7 @@ namespace FatturazioneContratti.Invoicing
             public DateTime DataScadenzaFissa { get; set; }
             public required ICollection<AllordCliContrattoDistintaServAgg> AllordCliContrattoDistintaServAgg { get; set; }
             public required AlltipoRigaServizio AlltipoRigaServizio { get; set; }
-            public required String Servizio { get; set; }
+            public required string Servizio { get; set; }
         }
 
         #endregion

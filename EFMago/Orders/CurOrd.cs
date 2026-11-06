@@ -1,9 +1,9 @@
 using System;
 using System.Linq;
-using EFMago.Models;
-using FatturazioneContratti.Common;
+using EFMago.Data.Models;
+using EFMago.Common;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     /// <summary>
     /// Porting 1:1 di CurOrd.vb (3tables/Ordini/CurOrd.vb): rappresenta la testa

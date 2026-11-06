@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using EFMago.Data.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 
@@ -9,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 // Prima generazione delle tabelle alla versione Mago.net 3.14.boh ( forse la 18)
 // Adeguare con campi nuovi se serve
 
-namespace EFMago.Models
+namespace EFMago.Data
 {
     public partial class FattureContext : DbContext
     {

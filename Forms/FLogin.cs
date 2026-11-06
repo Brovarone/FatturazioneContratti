@@ -1,14 +1,15 @@
-﻿using FatturazioneContratti.Invoicing;
-using FatturazioneContratti.Orders;
-using FatturazioneContratti.Common;
+using EFMago.Invoicing;
+using EFMago.Orders;
+using EFMago.Common;
 using FatturazioneContratti.Config;
-using FatturazioneContratti.Data;
+using EFMago.Data;
 using System;
 using System.Data;
 using System.Drawing;
 using System.IO;
 using System.Text.Json;
 using System.Windows.Forms;
+using EFMago.Invoicing;
 
 namespace FatturazioneContratti.Forms
 {

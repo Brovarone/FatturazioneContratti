@@ -2,7 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Reflection;
 
-namespace FatturazioneContratti.Common
+namespace EFMago.Common
 {
     public static class EntityCloner
     {

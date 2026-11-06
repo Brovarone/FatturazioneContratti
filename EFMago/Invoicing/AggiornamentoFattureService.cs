@@ -1,13 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Data;
-using System.Linq;
-using System.Text;
-using FatturazioneContratti.Common;
-using FatturazioneContratti.Data;
+using EFMago.Common;
+using EFMago.Data;
 using Microsoft.Data.SqlClient;
+using System.Data;
+using System.Text;
 
-namespace FatturazioneContratti.Invoicing
+namespace EFMago.Invoicing
 {
     public static class AggiornamentoFattureService
     {

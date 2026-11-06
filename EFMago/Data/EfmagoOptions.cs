@@ -1,6 +1,6 @@
-using FatturazioneContratti.Common;
+using EFMago.Common;
 
-namespace FatturazioneContratti.Data
+namespace EFMago.Data
 {
     /// <summary>
     /// Opzioni di funzionamento della libreria EFMago, impostate dall'applicazione ospitante

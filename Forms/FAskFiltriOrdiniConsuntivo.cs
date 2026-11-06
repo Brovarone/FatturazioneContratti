@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
-using FatturazioneContratti.Invoicing;
+using EFMago.Invoicing;
 
 namespace FatturazioneContratti.Forms
 {

@@ -1,8 +1,8 @@
-using FatturazioneContratti.Common;
+using EFMago.Common;
 using System;
 using System.Collections.Generic;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     /// <summary>
     /// Riga da creare in un nuovo ordine (sito web di sola scrittura ordini).

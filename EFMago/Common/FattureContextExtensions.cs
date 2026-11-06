@@ -4,9 +4,9 @@ using System.Globalization;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
-using EFMago.Models;
+using EFMago.Data.Models;
 
-namespace FatturazioneContratti.Common
+namespace EFMago.Common
 {
     public static class FattureContextExtensions
     {

@@ -1,7 +1,7 @@
-using FatturazioneContratti.Common;
+using EFMago.Common;
 using System;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     /// <summary>
     /// Opzioni di esecuzione di <see cref="GenerazioneRigheOrdiniService.GeneraRigheOrdine"/>:

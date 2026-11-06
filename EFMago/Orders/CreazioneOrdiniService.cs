@@ -1,5 +1,7 @@
-using EFMago.Models;
-using FatturazioneContratti.Common;
+using EFMago.Common;
+using EFMago.Data;
+using EFMago.Data.Models;
+using EFMago.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System;
@@ -9,7 +11,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Text;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     /// <summary>
     /// Creazione ordini cliente da zero (testata MaSaleOrd + righe + Summary/Shipping/Notes),

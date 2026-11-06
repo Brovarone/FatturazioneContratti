@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace FatturazioneContratti.Common
+namespace EFMago.Common
 {
     /// <summary>
     /// Contratto per i DTO filtri che sanno descriversi nel log.

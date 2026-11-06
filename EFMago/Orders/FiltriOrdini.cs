@@ -1,8 +1,8 @@
-using FatturazioneContratti.Common;
+using EFMago.Common;
 using System;
 using System.Text;
 
-namespace FatturazioneContratti.Orders
+namespace EFMago.Orders
 {
     public class FiltriOrdini : ILogFiltri
     {

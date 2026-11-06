@@ -1,8 +1,8 @@
-using FatturazioneContratti.Data;
+using EFMago.Data;
 using System;
 using System.Text;
 
-namespace FatturazioneContratti.Common
+namespace EFMago.Common
 {
     /// <summary>
     /// Routing dei log in un punto solo (procedure in AGENTS.md, §Log e diagnostica):

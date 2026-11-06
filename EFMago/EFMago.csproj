@@ -7,7 +7,6 @@
     <!-- Libreria di dominio/data-layer condivisa tra il WinForms (FatturazioneContratti)
          e il futuro sito Blazor. Nessuna dipendenza da WinForms: la configurazione
          arriva tramite EfmagoOptions (vedi SqlTools.Configure), non da AppConfig. -->
-    <RootNamespace>FatturazioneContratti</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>

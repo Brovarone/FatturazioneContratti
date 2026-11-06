@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Text.Json;
-using FatturazioneContratti.Common;
-using FatturazioneContratti.Data;
+using EFMago.Common;
+using EFMago.Data;
 
 namespace FatturazioneContratti.Config
 {
